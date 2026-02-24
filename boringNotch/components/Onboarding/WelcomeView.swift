@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftUIIntrospect
 
 struct WelcomeView: View {
-    var onGetStarted: (() -> Void)? = nil
+    var onGetStarted: (() -> Void)?
     var body: some View {
         ZStack(alignment: .top) {
             ZStack {
@@ -26,7 +26,7 @@ struct WelcomeView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 100, height: 100)
                         .padding(.bottom, 8)
-                    Text("Boring Notch")
+                    Text("Aitronos Notch")
                         .font(.system(.largeTitle, design: .default))
                         .fontWeight(.semibold)
                     Text("Welcome")
@@ -49,7 +49,6 @@ struct WelcomeView: View {
                             .padding(.bottom, 30)
                     }
 
-
                     Button {
                         onGetStarted?()
                     } label: {
@@ -61,15 +60,16 @@ struct WelcomeView: View {
                 }
                 .padding(.top)
             }
-            
-            Image("theboringteam")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(height: 22)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                .padding()
-                .padding(.bottom, 36)
-                .blendMode(.overlay)
+
+            // Aitronos branding (logo asset TBD)
+            // Image("aitronos-logo")
+            //     .resizable()
+            //     .aspectRatio(contentMode: .fit)
+            //     .frame(height: 22)
+            //     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            //     .padding()
+            //     .padding(.bottom, 36)
+            //     .blendMode(.overlay)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()

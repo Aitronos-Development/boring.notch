@@ -27,7 +27,6 @@ final class ShelfStateViewModel: ObservableObject {
         items = ShelfPersistenceService.shared.load()
     }
 
-
     func add(_ newItems: [ShelfItem]) {
         guard !newItems.isEmpty else { return }
         var merged = items
@@ -57,25 +56,24 @@ final class ShelfStateViewModel: ObservableObject {
 
     private func scheduleDeferredBookmarkUpdate(for item: ShelfItem, bookmark: Data) {
         pendingBookmarkUpdates[item.id] = bookmark
-        
+
         // Cancel existing task and schedule a new one
         updateTask?.cancel()
         updateTask = Task { @MainActor [weak self] in
             await Task.yield()
-            
+
             guard let self = self else { return }
-            
+
             for (itemID, bookmarkData) in self.pendingBookmarkUpdates {
                 if let idx = self.items.firstIndex(where: { $0.id == itemID }),
                    case .file = self.items[idx].kind {
                     self.items[idx].kind = .file(bookmark: bookmarkData)
                 }
             }
-            
+
             self.pendingBookmarkUpdates.removeAll()
         }
     }
-
 
     func load(_ providers: [NSItemProvider]) {
         guard !providers.isEmpty else { return }
@@ -109,7 +107,6 @@ final class ShelfStateViewModel: ObservableObject {
             await MainActor.run { self.items = keep }
         }
     }
-
 
     func resolveFileURL(for item: ShelfItem) -> URL? {
         guard case .file(let bookmarkData) = item.kind else { return nil }

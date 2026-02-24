@@ -35,7 +35,7 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
 
     func setFavorite(_ favorite: Bool) async {
         let bundleID = playbackState.bundleIdentifier
-        
+
         if bundleID == "com.apple.Music" {
             let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music")
             if !runningApps.isEmpty {
@@ -49,7 +49,7 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
                 try? await AppleScriptHelper.executeVoid(script)
             }
         }
-        
+
         // Update the favorite state locally and fetch updated info
         try? await Task.sleep(for: .milliseconds(150))
         await updatePlaybackInfo()
@@ -83,7 +83,7 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
                 bundle, "MRMediaRemoteSetShuffleMode" as CFString),
             let MRMediaRemoteSetRepeatModePointer = CFBundleGetFunctionPointerForName(
                 bundle, "MRMediaRemoteSetRepeatMode" as CFString)
-            
+
         else { return nil }
 
         mediaRemoteBundle = bundle
@@ -101,12 +101,12 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
 
     deinit {
         streamTask?.cancel()
-        
+
         if let pipeHandler = self.pipeHandler {
             Task { await pipeHandler.close()
             }
         }
-        
+
         if let process = self.process {
             if process.isRunning {
                 process.terminate()
@@ -146,26 +146,26 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
     func isActive() -> Bool {
         return true
     }
-    
+
     func toggleShuffle() async {
         // MRMediaRemoteSendCommandFunction(6, nil)
         MRMediaRemoteSetShuffleModeFunction(playbackState.isShuffled ? 1 : 3)
         playbackState.isShuffled.toggle()
     }
-    
+
     func toggleRepeat() async {
         // MRMediaRemoteSendCommandFunction(7, nil)
         let newRepeatMode = (playbackState.repeatMode == .off) ? 3 : (playbackState.repeatMode.rawValue - 1)
         playbackState.repeatMode = RepeatMode(rawValue: newRepeatMode) ?? .off
         MRMediaRemoteSetRepeatModeFunction(newRepeatMode)
     }
-    
+
     func setVolume(_ level: Double) async {
         // MediaRemote framework doesn't provide direct volume control for the active audio session
         // As a workaround, try to control the currently active music app directly
         let clampedLevel = max(0.0, min(1.0, level))
         let volumePercentage = Int(clampedLevel * 100)
-        
+
         let bundleID = playbackState.bundleIdentifier
         if !bundleID.isEmpty {
             if bundleID == "com.apple.Music" {
@@ -182,10 +182,10 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
                 }
             }
         }
-        
+
         playbackState.volume = clampedLevel
     }
-    
+
     // MARK: - Setup Methods
     private func setupNowPlayingObserver() async {
         let process = Process()
@@ -196,13 +196,13 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
             assertionFailure("Could not find mediaremote-adapter.pl script or framework path")
             return
         }
-        
+
         process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
         process.arguments = [scriptURL.path, frameworkPath, "stream"]
-        
+
         let pipeHandler = JSONLinesPipeHandler()
         process.standardOutput = await pipeHandler.getPipe()
-        
+
         self.process = process
         self.pipeHandler = pipeHandler
 
@@ -219,7 +219,7 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
     // MARK: - Async Stream Processing
     private func processJSONStream() async {
         guard let pipeHandler = self.pipeHandler else { return }
-        
+
         await pipeHandler.readJSONLines(as: NowPlayingUpdate.self) { [weak self] update in
             await self?.handleAdapterUpdate(update)
         }
@@ -231,12 +231,12 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         let diff = update.diff ?? false
 
         var newPlaybackState = PlaybackState(bundleIdentifier: playbackState.bundleIdentifier)
-        
+
         newPlaybackState.title = payload.title ?? (diff ? self.playbackState.title : "")
         newPlaybackState.artist = payload.artist ?? (diff ? self.playbackState.artist : "")
         newPlaybackState.album = payload.album ?? (diff ? self.playbackState.album : "")
         newPlaybackState.duration = payload.duration ?? (diff ? self.playbackState.duration : 0)
-        
+
         if let elapsedTime = payload.elapsedTime {
             newPlaybackState.currentTime = elapsedTime
         } else if diff {
@@ -250,7 +250,6 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
             newPlaybackState.currentTime = 0
         }
 
-        
         if let shuffleMode = payload.shuffleMode {
             newPlaybackState.isShuffled = shuffleMode != 1
         } else if !diff {
@@ -290,22 +289,22 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
             payload.bundleIdentifier ??
             (diff ? self.playbackState.bundleIdentifier : "")
         )
-        
+
         newPlaybackState.volume = payload.volume ?? (diff ? self.playbackState.volume : 0.5)
-        
+
         self.playbackState = newPlaybackState
-        
+
         // Fetch favorite state for supported apps asynchronously
         // await fetchFavoriteStateIfSupported()
     }
-    
+
      private func fetchFavoriteStateIfSupported() async {
          let bundleID = playbackState.bundleIdentifier
-        
+
          if bundleID == "com.apple.Music" {
              let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music")
              guard !runningApps.isEmpty else { return }
-             
+
              let script = """
              tell application "Music"
                  try
@@ -322,7 +321,7 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
              }
          }
      }
-    
+
 }
 
 struct NowPlayingUpdate: Codable {
@@ -351,16 +350,16 @@ actor JSONLinesPipeHandler {
     private let pipe: Pipe
     private let fileHandle: FileHandle
     private var buffer = ""
-    
+
     init() {
         self.pipe = Pipe()
         self.fileHandle = pipe.fileHandleForReading
     }
-    
+
     func getPipe() -> Pipe {
         return pipe
     }
-    
+
     func readJSONLines<T: Decodable>(as type: T.Type, onLine: @escaping (T) async -> Void) async {
         do {
             try await self.processLines(as: type) { decodedObject in
@@ -370,19 +369,19 @@ actor JSONLinesPipeHandler {
             print("Error processing JSON stream: \(error)")
         }
     }
-    
+
     private func processLines<T: Decodable>(as type: T.Type, onLine: @escaping (T) async -> Void) async throws {
         while true {
             let data = try await readData()
             guard !data.isEmpty else { break }
-            
+
             if let chunk = String(data: data, encoding: .utf8) {
                 buffer.append(chunk)
-                
+
                 while let range = buffer.range(of: "\n") {
                     let line = String(buffer[..<range.lowerBound])
                     buffer = String(buffer[range.upperBound...])
-                    
+
                     if !line.isEmpty {
                         await processJSONLine(line, as: type, onLine: onLine)
                     }
@@ -390,7 +389,7 @@ actor JSONLinesPipeHandler {
             }
         }
     }
-    
+
     private func processJSONLine<T: Decodable>(_ line: String, as type: T.Type, onLine: @escaping (T) async -> Void) async {
         guard let data = line.data(using: .utf8) else {
             return
@@ -402,10 +401,10 @@ actor JSONLinesPipeHandler {
             // Ignore lines that can't be decoded
         }
     }
-    
+
     private func readData() async throws -> Data {
         return try await withCheckedThrowingContinuation { continuation in
-            
+
             fileHandle.readabilityHandler = { handle in
                 let data = handle.availableData
                 handle.readabilityHandler = nil
@@ -413,7 +412,7 @@ actor JSONLinesPipeHandler {
             }
         }
     }
-    
+
     func close() async {
         do {
             fileHandle.readabilityHandler = nil

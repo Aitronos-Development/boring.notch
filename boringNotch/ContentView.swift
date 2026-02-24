@@ -4,6 +4,7 @@
 //
 //  Created by Harsh Vardhan Goswami  on 02/08/24
 //  Modified by Richard Kunkli on 24/08/2024.
+//  Last build: 2026-02-23
 //
 
 import AVFoundation
@@ -23,8 +24,13 @@ struct ContentView: View {
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var brightnessManager = BrightnessManager.shared
     @ObservedObject var volumeManager = VolumeManager.shared
+    @ObservedObject var teamManager = TeamPresenceManager.shared
+    @ObservedObject var timerManager = TimeTrackingManager.shared
+    @ObservedObject var vpnManager = VpnManager.shared
+    @ObservedObject var notificationManager = NotificationManager.shared
     @State private var hoverTask: Task<Void, Never>?
     @State private var isHovering: Bool = false
+    @State private var tabSwitching: Bool = false
     @State private var anyDropDebounceTask: Task<Void, Never>?
 
     @State private var gestureProgress: CGFloat = .zero
@@ -58,23 +64,55 @@ struct ContentView: View {
         )
     }
 
-    private var computedChinWidth: CGFloat {
-        var chinWidth: CGFloat = vm.closedNotchSize.width
-
-        if coordinator.expandingView.type == .battery && coordinator.expandingView.show
-            && vm.notchState == .closed && Defaults[.showPowerStatusNotifications]
-        {
-            chinWidth = 640
-        } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music)
+    private var isMusicChinActive: Bool {
+        (!coordinator.expandingView.show || coordinator.expandingView.type == .music)
             && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle)
             && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed
-        {
-            chinWidth += (2 * max(0, vm.effectiveClosedNotchHeight - 12) + 20)
+    }
+
+    private var isTimerChinActive: Bool {
+        !coordinator.expandingView.show && vm.notchState == .closed
+            && timerManager.isTracking && timerManager.isLoaded
+            && Defaults[.showTimerInClosedNotch] && !vm.hideOnClosed
+    }
+
+    private var isVpnTransitionChinActive: Bool {
+        !coordinator.expandingView.show && vm.notchState == .closed
+            && (vpnManager.isConnecting || vpnManager.isDisconnecting)
+            && vpnManager.isLoaded
+            && Defaults[.showVpnInClosedNotch] && !vm.hideOnClosed
+    }
+
+    private var computedChinWidth: CGFloat {
+        var chinWidth: CGFloat = vm.closedNotchSize.width
+        let sideWidth = max(0, vm.effectiveClosedNotchHeight - 12)
+
+        if coordinator.expandingView.type == .battery && coordinator.expandingView.show
+            && vm.notchState == .closed && Defaults[.showPowerStatusNotifications] {
+            chinWidth = 640
+        } else if isMusicChinActive && isTimerChinActive {
+            // Both music and timer: album art left + timer text right (wider)
+            chinWidth += (2 * sideWidth + 20) + 70
+        } else if isMusicChinActive {
+            chinWidth += (2 * sideWidth + 20)
+        } else if isTimerChinActive {
+            chinWidth += (2 * sideWidth + 20)
+        } else if isVpnTransitionChinActive {
+            chinWidth += (2 * sideWidth + 20)
+        } else if !coordinator.expandingView.show && vm.notchState == .closed
+            && (!musicManager.isPlaying && musicManager.isPlayerIdle) && teamManager.isLoaded && teamManager.onlineCount > 0
+            && Defaults[.showTeamInClosedNotch] && !vm.hideOnClosed {
+            chinWidth += (2 * sideWidth + 20)
+        } else if !coordinator.expandingView.show && vm.notchState == .closed
+            && (!musicManager.isPlaying && musicManager.isPlayerIdle) && !timerManager.isTracking
+            && !(teamManager.isLoaded && teamManager.onlineCount > 0 && Defaults[.showTeamInClosedNotch])
+            && vpnManager.isConnected && vpnManager.isLoaded
+            && Defaults[.showVpnInClosedNotch] && !vm.hideOnClosed {
+            chinWidth += (2 * sideWidth + 20)
         } else if !coordinator.expandingView.show && vm.notchState == .closed
             && (!musicManager.isPlaying && musicManager.isPlayerIdle) && Defaults[.showNotHumanFace]
-            && !vm.hideOnClosed
-        {
-            chinWidth += (2 * max(0, vm.effectiveClosedNotchHeight - 12) + 20)
+            && !vm.hideOnClosed {
+            chinWidth += (2 * sideWidth + 20)
         }
 
         return chinWidth
@@ -87,7 +125,7 @@ struct ContentView: View {
             let scaleFactor = 1.0 + gestureProgress * 0.01
             return max(0.6, scaleFactor)
         }()
-        
+
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
                 let mainLayout = NotchLayout()
@@ -116,13 +154,17 @@ struct ContentView: View {
                         .bottom,
                         vm.effectiveClosedNotchHeight == 0 ? 10 : 0
                     )
-                
+
                 mainLayout
-                    .frame(height: vm.notchState == .open ? vm.notchSize.height : nil)
+                    .modifier(NotchHeightModifier(
+                        isOpen: vm.notchState == .open,
+                        isFlexible: coordinator.currentView == .team || coordinator.currentView == .vpn || coordinator.currentView == .timeTracking,
+                        height: vm.notchSize.height
+                    ))
                     .conditionalModifier(true) { view in
                         let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
                         let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
-                        
+
                         return view
                             .animation(vm.notchState == .open ? openAnimation : closeAnimation, value: vm.notchState)
                             .animation(.smooth, value: gestureProgress)
@@ -147,7 +189,7 @@ struct ContentView: View {
                             }
                     }
                     .onReceive(NotificationCenter.default.publisher(for: .sharingDidFinish)) { _ in
-                        if vm.notchState == .open && !isHovering && !vm.isBatteryPopoverActive {
+                        if vm.notchState == .open && !isHovering && !vm.isBatteryPopoverActive  {
                             hoverTask?.cancel()
                             hoverTask = Task {
                                 try? await Task.sleep(for: .milliseconds(100))
@@ -167,6 +209,49 @@ struct ContentView: View {
                             }
                         }
                     }
+                    .onChange(of: coordinator.currentView) { _, _ in
+                        // Resize when switching tabs while open (team view is taller)
+                        if vm.notchState == .open {
+                            // Suppress close + data-driven resizes during tab switch —
+                            // the resize can momentarily move the content shape away
+                            // from the cursor, and data observers firing during the
+                            // animation cause overlapping springs → layout thrashing.
+                            tabSwitching = true
+                            withAnimation(animationSpring) {
+                                vm.notchSize = CGSize(width: openNotchSize.width, height: activeOpenHeight)
+                            }
+                            // Keep the guard active until the spring animation fully settles
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                                tabSwitching = false
+                            }
+                        }
+                    }
+                    // Re-size the notch when time tracking data changes (content-hugging).
+                    // Debounced: coalesce rapid publisher bursts into a single resize.
+                    .onReceive(
+                        ActiveTaskManager.shared.$activeTask
+                            .map { $0 != nil }
+                            .removeDuplicates()
+                            .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
+                    ) { _ in
+                        resizeIfTimeTracking()
+                    }
+                    .onReceive(
+                        NotchTimeSlotManager.shared.$slots
+                            .map { $0.isEmpty }
+                            .removeDuplicates()
+                            .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
+                    ) { _ in
+                        resizeIfTimeTracking()
+                    }
+                    .onReceive(
+                        TimeTrackingManager.shared.$recentTasks
+                            .map { $0.count }
+                            .removeDuplicates()
+                            .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
+                    ) { _ in
+                        resizeIfTimeTracking()
+                    }
                     .onChange(of: vm.isBatteryPopoverActive) {
                         if !vm.isBatteryPopoverActive && !isHovering && vm.notchState == .open && !SharingStateManager.shared.preventNotchClose {
                             hoverTask?.cancel()
@@ -182,6 +267,9 @@ struct ContentView: View {
                         }
                     }
                     .sensoryFeedback(.alignment, trigger: haptics)
+                    .onChange(of: notificationManager.newlyArrivedNotification?.id) { _, newId in
+                        handleNewNotificationArrival()
+                    }
                     .contextMenu {
                         Button("Settings") {
                             SettingsWindowController.shared.showWindow()
@@ -199,9 +287,12 @@ struct ContentView: View {
                         .frame(width: computedChinWidth, height: vm.chinHeight)
                 }
             }
+
+            // Notification toast is now shown in a separate window
+            // via NotificationToastWindowController (independent of Notch state)
         }
         .padding(.bottom, 8)
-        .frame(maxWidth: windowSize.width, maxHeight: windowSize.height, alignment: .top)
+        .frame(maxWidth: windowSize.width, maxHeight: activeWindowMaxHeight, alignment: .top)
         .compositingGroup()
         .scaleEffect(
             x: gestureScale,
@@ -217,7 +308,7 @@ struct ContentView: View {
 
             if isTargeted {
                 if vm.notchState == .closed {
-                    coordinator.currentView = .shelf
+                    coordinator.currentView = .home
                     doOpen()
                 }
                 return
@@ -256,8 +347,7 @@ struct ContentView: View {
                     Spacer()
                 } else {
                     if coordinator.expandingView.type == .battery && coordinator.expandingView.show
-                        && vm.notchState == .closed && Defaults[.showPowerStatusNotifications]
-                    {
+                        && vm.notchState == .closed && Defaults[.showPowerStatusNotifications] {
                         HStack(spacing: 0) {
                             HStack {
                                 Text(batteryModel.statusText)
@@ -285,10 +375,27 @@ struct ContentView: View {
                       } else if coordinator.sneakPeek.show && Defaults[.inlineHUD] && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && vm.notchState == .closed {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(.opacity)
-                      } else if (!coordinator.expandingView.show || coordinator.expandingView.type == .music) && vm.notchState == .closed && (musicManager.isPlaying || !musicManager.isPlayerIdle) && coordinator.musicLiveActivityEnabled && !vm.hideOnClosed {
+                      } else if isMusicChinActive && isTimerChinActive {
+                          CombinedMusicTimerChin()
+                              .frame(alignment: .center)
+                      } else if isMusicChinActive {
                           MusicLiveActivity()
                               .frame(alignment: .center)
-                      } else if !coordinator.expandingView.show && vm.notchState == .closed && (!musicManager.isPlaying && musicManager.isPlayerIdle) && Defaults[.showNotHumanFace] && !vm.hideOnClosed  {
+                      } else if isTimerChinActive {
+                          TimerLiveActivity()
+                              .frame(alignment: .center)
+                      } else if isVpnTransitionChinActive {
+                          VpnConnectingChin()
+                              .frame(alignment: .center)
+                      } else if !coordinator.expandingView.show && vm.notchState == .closed && (!musicManager.isPlaying && musicManager.isPlayerIdle) && teamManager.isLoaded && teamManager.onlineCount > 0 && Defaults[.showTeamInClosedNotch] && !vm.hideOnClosed {
+                          TeamSneakPeek()
+                      } else if !coordinator.expandingView.show && vm.notchState == .closed
+                          && (!musicManager.isPlaying && musicManager.isPlayerIdle) && !timerManager.isTracking
+                          && !(teamManager.isLoaded && teamManager.onlineCount > 0 && Defaults[.showTeamInClosedNotch])
+                          && vpnManager.isConnected && vpnManager.isLoaded
+                          && Defaults[.showVpnInClosedNotch] && !vm.hideOnClosed {
+                          VpnSneakPeek()
+                      } else if !coordinator.expandingView.show && vm.notchState == .closed && (!musicManager.isPlaying && musicManager.isPlayerIdle) && Defaults[.showNotHumanFace] && !vm.hideOnClosed {
                           BoringFaceAnimation()
                        } else if vm.notchState == .open {
                            BoringHeader()
@@ -325,7 +432,7 @@ struct ContentView: View {
                                   HStack(alignment: .center) {
                                       Image(systemName: "music.note")
                                       GeometryReader { geo in
-                                          MarqueeText(.constant(musicManager.songTitle + " - " + musicManager.artistName),  textColor: Defaults[.playerColorTinting] ? Color(nsColor: musicManager.avgColor).ensureMinimumBrightness(factor: 0.6) : .gray, minDuration: 1, frameWidth: geo.size.width)
+                                          MarqueeText(.constant(musicManager.songTitle + " - " + musicManager.artistName), textColor: Defaults[.playerColorTinting] ? Color(nsColor: musicManager.avgColor).ensureMinimumBrightness(factor: 0.6) : .gray, minDuration: 1, frameWidth: geo.size.width)
                                       }
                                   }
                                   .foregroundStyle(.gray)
@@ -341,13 +448,20 @@ struct ContentView: View {
               }
               .zIndex(2)
             if vm.notchState == .open {
-                VStack {
+                VStack(spacing: 0) {
                     switch coordinator.currentView {
                     case .home:
                         NotchHomeView(albumArtNamespace: albumArtNamespace)
                     case .shelf:
-                        ShelfView()
+                        NotchHomeView(albumArtNamespace: albumArtNamespace)
+                    case .team:
+                        NotchTeamView()
+                    case .vpn:
+                        NotchVpnView()
+                    case .timeTracking:
+                        NotchTimelineView()
                     }
+                    Spacer(minLength: 0)
                 }
                 .transition(
                     .scale(scale: 0.8, anchor: .top)
@@ -360,6 +474,96 @@ struct ContentView: View {
             }
         }
         .onDrop(of: [.fileURL, .url, .utf8PlainText, .plainText, .data], delegate: GeneralDropTargetDelegate(isTargeted: $vm.generalDropTargeting))
+    }
+
+    @ViewBuilder
+    func TeamSneakPeek() -> some View {
+        HStack {
+            HStack(spacing: 4) {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.gray)
+                Text("\(teamManager.onlineCount) online")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.gray)
+            }
+
+            Rectangle()
+                .fill(.black)
+                .frame(width: vm.closedNotchSize.width - 20)
+
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(sneakPeekStatusColor)
+                    .frame(width: 6, height: 6)
+                Text(teamManager.currentUserStatus.label)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.gray)
+            }
+        }
+        .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+    }
+
+    private var sneakPeekStatusColor: Color {
+        switch teamManager.currentUserStatus.dotColor {
+        case "green": return .green
+        case "red": return .red
+        case "yellow": return .yellow
+        default: return .gray
+        }
+    }
+
+    @ViewBuilder
+    func VpnSneakPeek() -> some View {
+        HStack {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.gray)
+                Text(vpnManager.downSpeedMbps)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.gray)
+            }
+
+            Rectangle()
+                .fill(.black)
+                .frame(width: vm.closedNotchSize.width - 20)
+
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.gray)
+                Text(vpnManager.upSpeedMbps)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.gray)
+            }
+        }
+        .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+    }
+
+    @ViewBuilder
+    func VpnConnectingChin() -> some View {
+        HStack {
+            HStack(spacing: 4) {
+                ProgressView()
+                    .controlSize(.mini)
+                    .scaleEffect(0.6)
+                Image(systemName: "shield.lefthalf.filled")
+                    .font(.system(size: 9))
+                    .foregroundStyle(vpnManager.isConnecting ? .green : .orange)
+            }
+            .frame(width: max(0, vm.effectiveClosedNotchHeight - 12))
+
+            Rectangle()
+                .fill(.black)
+                .frame(width: vm.closedNotchSize.width - 20)
+
+            Text(vpnManager.isConnecting ? "Connecting..." : "Disconnecting...")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(vpnManager.isConnecting ? .green : .orange)
+                .frame(width: max(0, vm.effectiveClosedNotchHeight + 30), alignment: .leading)
+        }
+        .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
     }
 
     @ViewBuilder
@@ -404,8 +608,7 @@ struct ContentView: View {
                 .overlay(
                     HStack(alignment: .top) {
                         if coordinator.expandingView.show
-                            && coordinator.expandingView.type == .music
-                        {
+                            && coordinator.expandingView.type == .music {
                             MarqueeText(
                                 .constant(musicManager.songTitle),
                                 textColor: Defaults[.coloredSpectrogram]
@@ -485,6 +688,77 @@ struct ContentView: View {
     }
 
     @ViewBuilder
+    func TimerLiveActivity() -> some View {
+        HStack {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 6, height: 6)
+                Image(systemName: "timer")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.green)
+            }
+            .frame(
+                width: max(0, vm.effectiveClosedNotchHeight - 12),
+                alignment: .center
+            )
+
+            Rectangle()
+                .fill(.black)
+                .frame(width: vm.closedNotchSize.width - 20)
+
+            Text(timerManager.elapsedFormatted)
+                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .foregroundStyle(.green)
+                .frame(
+                    width: max(0, vm.effectiveClosedNotchHeight - 12),
+                    alignment: .center
+                )
+        }
+        .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+    }
+
+    @ViewBuilder
+    func CombinedMusicTimerChin() -> some View {
+        HStack {
+            // Left: Album art (same as MusicLiveActivity)
+            Image(nsImage: musicManager.albumArt)
+                .resizable()
+                .clipped()
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: MusicPlayerImageSizes.cornerRadiusInset.closed)
+                )
+                .matchedGeometryEffect(id: "albumArt", in: albumArtNamespace)
+                .frame(
+                    width: max(0, vm.effectiveClosedNotchHeight - 12),
+                    height: max(0, vm.effectiveClosedNotchHeight - 12)
+                )
+
+            // Middle: Black notch gap
+            Rectangle()
+                .fill(.black)
+                .frame(width: vm.closedNotchSize.width - 20)
+
+            // Right: Timer elapsed + pulse dot
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 5, height: 5)
+                Text(timerManager.elapsedFormatted)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.green)
+                    .lineLimit(1)
+            }
+            .frame(
+                width: max(0, vm.effectiveClosedNotchHeight - 12) + 70,
+                alignment: .center
+            )
+        }
+        .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
+    }
+
+    @ViewBuilder
     var dragDetector: some View {
         if Defaults[.boringShelf] && vm.notchState == .closed {
             Color.clear
@@ -500,10 +774,63 @@ struct ContentView: View {
         }
     }
 
+    private var activeOpenHeight: CGFloat {
+        switch coordinator.currentView {
+        case .team: return Defaults[.teamMaxNotchHeight]
+        case .vpn: return 280
+        case .timeTracking:
+            return NotchTimelineView.idealHeight(
+                hasActiveTask: ActiveTaskManager.shared.activeTask != nil,
+                hasSlots: !NotchTimeSlotManager.shared.slots.isEmpty,
+                recentTaskCount: timerManager.recentTasks.count
+            )
+        default:
+            let customHeight = Defaults[.notchExpandedHeight]
+            // User has adjusted the height slider
+            if customHeight > openNotchSize.height {
+                return customHeight
+            }
+            // Stacked layout with both panels needs extra height
+            if Defaults[.notchExpandedLayout] == .stacked
+                && Defaults[.showCalendar]
+                && Defaults[.showTimeTracking]
+                && (timerManager.isTracking || TimeSlotSummaryManager.shared.hasPendingSlots || ActiveTaskManager.shared.activeTask != nil) {
+                return 210
+            }
+            return openNotchSize.height
+        }
+    }
+
+    /// Fixed window max height — always large enough for the tallest content.
+    /// Using a constant prevents the outer frame from shifting when switching tabs.
+    private var activeWindowMaxHeight: CGFloat {
+        500 + shadowPadding
+    }
+
+
     private func doOpen() {
         withAnimation(animationSpring) {
-            vm.open()
+            vm.open(height: activeOpenHeight)
         }
+    }
+
+    /// Re-adjust notch height when time tracking content changes (data loads, task selected/cleared).
+    /// Suppressed during tab switch animation to prevent overlapping animations / layout thrashing.
+    private func resizeIfTimeTracking() {
+        guard vm.notchState == .open,
+              coordinator.currentView == .timeTracking,
+              !tabSwitching else { return }
+        withAnimation(animationSpring) {
+            vm.notchSize = CGSize(width: openNotchSize.width, height: activeOpenHeight)
+        }
+    }
+
+    // MARK: - Notification Handling
+
+    private func handleNewNotificationArrival() {
+        // Toast + effects are now handled by NotificationToastWindowController
+        // (triggered from NotificationManager.fetchNotifications)
+        notificationManager.clearNewArrival()
     }
 
     // MARK: - Hover Management
@@ -511,29 +838,29 @@ struct ContentView: View {
     private func handleHover(_ hovering: Bool) {
         if coordinator.firstLaunch { return }
         hoverTask?.cancel()
-        
+
         if hovering {
             withAnimation(animationSpring) {
                 isHovering = true
             }
-            
+
             if vm.notchState == .closed && Defaults[.enableHaptics] {
                 haptics.toggle()
             }
-            
+
             guard vm.notchState == .closed,
                   !coordinator.sneakPeek.show,
                   Defaults[.openNotchOnHover] else { return }
-            
+
             hoverTask = Task {
                 try? await Task.sleep(for: .seconds(Defaults[.minimumHoverDuration]))
                 guard !Task.isCancelled else { return }
-                
+
                 await MainActor.run {
                     guard self.vm.notchState == .closed,
                           self.isHovering,
                           !self.coordinator.sneakPeek.show else { return }
-                    
+
                     self.doOpen()
                 }
             }
@@ -541,12 +868,16 @@ struct ContentView: View {
             hoverTask = Task {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard !Task.isCancelled else { return }
-                
+
                 await MainActor.run {
+                    // Don't close during tab switch — resize can briefly
+                    // move the content shape away from the cursor
+                    guard !self.tabSwitching else { return }
+
                     withAnimation(animationSpring) {
                         self.isHovering = false
                     }
-                    
+
                     if self.vm.notchState == .open && !self.vm.isBatteryPopoverActive && !SharingStateManager.shared.preventNotchClose {
                         self.vm.close()
                     }
@@ -597,7 +928,7 @@ struct ContentView: View {
             withAnimation(animationSpring) {
                 isHovering = false
             }
-            if !SharingStateManager.shared.preventNotchClose { 
+            if !SharingStateManager.shared.preventNotchClose {
                 gestureProgress = .zero
                 vm.close()
             }
@@ -646,6 +977,23 @@ struct GeneralDropTargetDelegate: DropDelegate {
 
     func performDrop(info: DropInfo) -> Bool {
         return false
+    }
+}
+
+/// Applies fixed height for non-team views, maxHeight for team view (content-sized).
+/// Uses a single view identity so SwiftUI can animate smoothly between states.
+private struct NotchHeightModifier: ViewModifier {
+    let isOpen: Bool
+    let isFlexible: Bool
+    let height: CGFloat
+
+    func body(content: Content) -> some View {
+        // When closed: no constraints (nil/nil → intrinsic size)
+        // When open + flexible (team/vpn): minHeight nil, maxHeight = height (content-sized, capped)
+        // When open + other: minHeight = height, maxHeight = height (fixed)
+        let minH: CGFloat? = isOpen && !isFlexible ? height : nil
+        let maxH: CGFloat? = isOpen ? height : nil
+        content.frame(minHeight: minH, maxHeight: maxH)
     }
 }
 

@@ -49,7 +49,7 @@ class BatteryActivityManager {
         startMonitoring()
         setupLowPowerModeObserver()
     }
-    
+
     /// Setup observer for low power mode changes
     private func setupLowPowerModeObserver() {
         NotificationCenter.default.addObserver(
@@ -64,7 +64,7 @@ class BatteryActivityManager {
     @objc private func lowPowerModeChanged() {
         notifyBatteryChanges()
     }
-    
+
     /// Starts monitoring battery changes
     private func startMonitoring() {
         guard let powerSource = IOPSNotificationCreateRunLoopSource({ context in
@@ -88,20 +88,20 @@ class BatteryActivityManager {
 
     /// Checks for changes in a property and notifies observers
     private func checkAndNotify<T: Equatable>(
-        previous: T, 
-        current: T, 
+        previous: T,
+        current: T,
         eventGenerator: (T) -> BatteryEvent
     ) {
         if previous != current {
             enqueueNotification(eventGenerator(current))
         }
     }
-    
+
     /// Notifies the observers of battery changes
     /// Checks for changes in battery status and notifies observers
     private func notifyBatteryChanges() {
         let batteryInfo = getBatteryInfo()
-        
+
         // Check for changes
         if let previousInfo = previousBatteryInfo {
             // Usar la función auxiliar para cada propiedad
@@ -110,31 +110,31 @@ class BatteryActivityManager {
                 current: batteryInfo.isPluggedIn,
                 eventGenerator: { .powerSourceChanged(isPluggedIn: $0) }
             )
-            
+
             checkAndNotify(
                 previous: previousInfo.currentCapacity,
                 current: batteryInfo.currentCapacity,
                 eventGenerator: { .batteryLevelChanged(level: $0) }
             )
-            
+
             checkAndNotify(
                 previous: previousInfo.isCharging,
                 current: batteryInfo.isCharging,
                 eventGenerator: { .isChargingChanged(isCharging: $0) }
             )
-            
+
             checkAndNotify(
                 previous: previousInfo.isInLowPowerMode,
                 current: batteryInfo.isInLowPowerMode,
                 eventGenerator: { .lowPowerModeChanged(isEnabled: $0) }
             )
-            
+
             checkAndNotify(
                 previous: previousInfo.timeToFullCharge,
                 current: batteryInfo.timeToFullCharge,
                 eventGenerator: { .timeToFullChargeChanged(time: $0) }
             )
-            
+
             checkAndNotify(
                 previous: previousInfo.maxCapacity,
                 current: batteryInfo.maxCapacity,
@@ -171,27 +171,27 @@ class BatteryActivityManager {
         notificationQueue.append(event)
         processNextNotification()
     }
-    
+
     /// Processes the next notification in the queue
     /// If there are no more notifications, the queue is cleared
     /// and the processing flag is set to false
     private func processNextNotification() {
         guard !isProcessingNotifications, !notificationQueue.isEmpty else { return }
         isProcessingNotifications = true
-        
+
         let event = notificationQueue.removeFirst()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self = self else { return }
             self.notifyObservers(event: event)
             self.isProcessingNotifications = false
-            
+
             // Check if there are more items in the queue
             if !self.notificationQueue.isEmpty {
                 self.processNextNotification()
             }
         }
     }
-    
+
     /// Initializes the battery information when the manager starts
     /// - Returns: Current battery information
     func initializeBatteryInfo() -> BatteryInfo {
@@ -217,35 +217,35 @@ class BatteryActivityManager {
             guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue() else {
                 throw BatteryError.powerSourceUnavailable
             }
-            
+
             guard let sources = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef],
                 !sources.isEmpty else {
                 throw BatteryError.batteryInfoUnavailable("No power sources available")
             }
-            
+
             let source = sources.first!
-            
+
             guard let description = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any] else {
                 throw BatteryError.batteryInfoUnavailable("Could not get power source description")
             }
-            
+
             // Extract required battery parameters with error handling
             guard let currentCapacity = description[kIOPSCurrentCapacityKey] as? Float else {
                 throw BatteryError.batteryParameterMissing("Current capacity")
             }
-            
+
             guard let maxCapacity = description[kIOPSMaxCapacityKey] as? Float else {
                 throw BatteryError.batteryParameterMissing("Max capacity")
             }
-            
+
             guard let isCharging = description["Is Charging"] as? Bool else {
                 throw BatteryError.batteryParameterMissing("Charging state")
             }
-            
+
             guard let powerSource = description[kIOPSPowerSourceStateKey] as? String else {
                 throw BatteryError.batteryParameterMissing("Power source state")
             }
-            
+
             // Create battery info with the extracted parameters
             var batteryInfo = BatteryInfo(
                 isPluggedIn: powerSource == kIOPSACPowerValue,
@@ -255,14 +255,14 @@ class BatteryActivityManager {
                 isInLowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
                 timeToFullCharge: 0
             )
-            
+
             // Optional parameters
             if let timeToFullCharge = description[kIOPSTimeToFullChargeKey] as? Int {
                 batteryInfo.timeToFullCharge = timeToFullCharge
             }
-            
+
             return batteryInfo
-            
+
         } catch BatteryError.powerSourceUnavailable {
             print("⚠️ Error: Power source information unavailable")
             return defaultBatteryInfo
@@ -277,7 +277,7 @@ class BatteryActivityManager {
             return defaultBatteryInfo
         }
     }
-    
+
     /// Adds an observer to listen to battery changes
     /// - Parameter observer: The observer closure to be called on battery events
     /// - Returns: The ID of the observer for later removal
@@ -292,7 +292,7 @@ class BatteryActivityManager {
         guard id >= 0 && id < observers.count else { return }
         observers.remove(at: id)
     }
-    
+
     /// Notifies all observers of a battery event
     /// - Parameter event: The battery event to notify
     private func notifyObservers(event: BatteryEvent) {
@@ -303,12 +303,12 @@ class BatteryActivityManager {
             }
         }
     }
-    
+
     deinit {
         stopMonitoring()
         NotificationCenter.default.removeObserver(self)
     }
-    
+
 }
 
 /// Struct to hold battery information

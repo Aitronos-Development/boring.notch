@@ -60,7 +60,7 @@ final class QuickLookService: ObservableObject {
             previewPanel = nil
         }
     }
-    
+
     private func stopAccessingCurrentURLs() {
         NSLog("Stopping access to \(accessingURLs.count) URLs")
         for url in accessingURLs where url.isFileURL {
@@ -73,7 +73,7 @@ final class QuickLookService: ObservableObject {
             previewPanel = nil
         }
     }
-    
+
     func showQuickLook(urls: [URL]) {
         show(urls: urls, selectFirst: true, slideshow: false)
     }
@@ -114,7 +114,6 @@ extension View {
         self.modifier(QuickLookPresenter(service: service))
     }
 }
-
 
 final class QuickLookDataSource: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     private let urls: [URL]

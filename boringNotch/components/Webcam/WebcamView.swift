@@ -12,7 +12,7 @@ import SwiftUI
 struct CameraPreviewView: View {
     @EnvironmentObject var vm: BoringViewModel
     @ObservedObject var webcamManager: WebcamManager
-    
+
     // Track if authorization request is in progress to avoid multiple requests
     @State private var isRequestingAuthorization: Bool = false
 
@@ -53,12 +53,12 @@ struct CameraPreviewView: View {
         }
         .aspectRatio(1, contentMode: .fit)
     }
-    
+
     private func handleCameraTap() {
         if isRequestingAuthorization {
             return // Prevent multiple authorization requests
         }
-        
+
         switch webcamManager.authorizationStatus {
         case .authorized:
             if webcamManager.isSessionRunning {

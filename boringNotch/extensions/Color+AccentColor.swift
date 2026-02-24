@@ -17,7 +17,7 @@ extension Color {
         }
         return .accentColor
     }
-    
+
     /// Returns a darker version of the accent color suitable for backgrounds
     static var effectiveAccentBackground: Color {
         if Defaults[.useCustomAccentColor],
@@ -38,7 +38,7 @@ extension NSColor {
         }
         return NSColor.controlAccentColor
     }
-    
+
     /// Returns a darker version of the accent color as NSColor suitable for backgrounds
     static var effectiveAccentBackground: NSColor {
         if Defaults[.useCustomAccentColor],

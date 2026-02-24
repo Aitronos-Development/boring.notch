@@ -18,6 +18,7 @@ enum SneakContentType {
     case mic
     case battery
     case download
+    case team
 }
 
 struct sneakPeek {
@@ -79,12 +80,12 @@ class BoringViewCoordinator: ObservableObject {
             }
         }
     }
-    
+
     @Default(.hudReplacement) var hudReplacement: Bool
-    
+
     // Legacy storage for migration
     @AppStorage("preferred_screen_name") private var legacyPreferredScreenName: String?
-    
+
     // New UUID-based storage
     @AppStorage("preferred_screen_uuid") var preferredScreenUUID: String? {
         didSet {
@@ -120,7 +121,7 @@ class BoringViewCoordinator: ObservableObject {
             // No legacy value, use main screen
             preferredScreenUUID = NSScreen.main?.displayUUID
         }
-        
+
         selectedScreenUUID = preferredScreenUUID ?? NSScreen.main?.displayUUID ?? ""
         // Observe changes to accessibility authorization and react accordingly
         accessibilityObserver = NotificationCenter.default.addObserver(
@@ -174,12 +175,11 @@ class BoringViewCoordinator: ObservableObject {
             }
         }
     }
-    
+
     @objc func sneakPeekEvent(_ notification: Notification) {
         let decoder = JSONDecoder()
         if let decodedData = try? decoder.decode(
-            SharedSneakPeek.self, from: notification.userInfo?.first?.value as! Data)
-        {
+            SharedSneakPeek.self, from: notification.userInfo?.first?.value as! Data) {
             let contentType =
                 decodedData.type == "brightness"
                 ? SneakContentType.brightness
@@ -293,7 +293,7 @@ class BoringViewCoordinator: ObservableObject {
             }
         }
     }
-    
+
     func showEmpty() {
         currentView = .home
     }

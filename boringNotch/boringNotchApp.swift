@@ -3,6 +3,7 @@
 //  boringNotchApp
 //
 //  Created by Harsh Vardhan  Goswami  on 02/08/24.
+//  Last build: 2026-02-23
 //
 
 import AVFoundation
@@ -15,7 +16,6 @@ import SwiftUI
 @main
 struct DynamicNotchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @Default(.menubarIcon) var showMenuBarIcon
     @Environment(\.openWindow) var openWindow
 
     let updaterController: SPUStandardUpdaterController
@@ -29,20 +29,11 @@ struct DynamicNotchApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("boring.notch", systemImage: "sparkle", isInserted: $showMenuBarIcon) {
-            Button("Settings") {
-                SettingsWindowController.shared.showWindow()
-            }
-            .keyboardShortcut(KeyEquivalent(","), modifiers: .command)
-            CheckForUpdatesView(updater: updaterController.updater)
-            Divider()
-            Button("Restart Boring Notch") {
-                ApplicationRelauncher.restart()
-            }
-            Button("Quit", role: .destructive) {
-                NSApplication.shared.terminate(self)
-            }
-            .keyboardShortcut(KeyEquivalent("Q"), modifiers: .command)
+        // Menu bar icon removed for Aitronos Hub integration
+        // All app functionality is accessed through the notch UI
+        // Settings can be accessed via notch hover → gear icon
+        Settings {
+            EmptyView()
         }
     }
 }
@@ -105,7 +96,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             disableSkyLightOnAllWindows()
         }
     }
-    
+
     @MainActor
     private func enableSkyLightOnAllWindows() {
         if Defaults[.showOnAllDisplays] {
@@ -120,7 +111,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
-    
+
     @MainActor
     private func disableSkyLightOnAllWindows() {
         // Delay disabling SkyLight to avoid flicker during unlock transition
@@ -144,7 +135,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func cleanupWindows(shouldInvert: Bool = false) {
         let shouldCleanupMulti = shouldInvert ? !Defaults[.showOnAllDisplays] : Defaults[.showOnAllDisplays]
-        
+
         if shouldCleanupMulti {
             windows.values.forEach { window in
                 window.close()
@@ -192,11 +183,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupDragDetectorForScreen(_ screen: NSScreen) {
         guard let uuid = screen.displayUUID else { return }
-        
+
         let screenFrame = screen.frame
         let notchHeight = openNotchSize.height
         let notchWidth = openNotchSize.width
-        
+
         // Create notch region at the top-center of the screen where an open notch would occupy
         let notchRegion = CGRect(
             x: screenFrame.midX - notchWidth / 2,
@@ -204,22 +195,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             width: notchWidth,
             height: notchHeight
         )
-        
+
         let detector = DragDetector(notchRegion: notchRegion)
-        
+
         detector.onDragEntersNotchRegion = { [weak self] in
             Task { @MainActor in
                 self?.handleDragEntersNotchRegion(onScreen: screen)
             }
         }
-        
+
         dragDetectors[uuid] = detector
         detector.startMonitoring()
     }
 
     private func handleDragEntersNotchRegion(onScreen screen: NSScreen) {
         guard let uuid = screen.displayUUID else { return }
-        
+
         if Defaults[.showOnAllDisplays], let viewModel = viewModels[uuid] {
             viewModel.open()
             coordinator.currentView = .shelf
@@ -232,9 +223,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func createBoringNotchWindow(for screen: NSScreen, with viewModel: BoringViewModel) -> NSWindow {
         let rect = NSRect(x: 0, y: 0, width: windowSize.width, height: windowSize.height)
         let styleMask: NSWindow.StyleMask = [.borderless, .nonactivatingPanel, .utilityWindow, .hudWindow]
-        
+
         let window = BoringNotchSkyLightWindow(contentRect: rect, styleMask: styleMask, backing: .buffered, defer: false)
-        
+
         // Enable SkyLight only when screen is locked
         if isScreenLocked {
             window.enableSkyLight()
@@ -278,6 +269,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+
+        // Initialize session lifecycle manager (meeting detection + sleep/wake prompts)
+        _ = SessionLifecycleManager.shared
 
         NotificationCenter.default.addObserver(
             self,
@@ -426,8 +420,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             playWelcomeSound()
         } else if MusicManager.shared.isNowPlayingDeprecated
-            && Defaults[.mediaController] == .nowPlaying
-        {
+            && Defaults[.mediaController] == .nowPlaying {
             DispatchQueue.main.async {
                 self.showOnboardingWindow(step: .musicPermission)
             }
@@ -489,7 +482,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Create or update windows for all screens
             for screen in NSScreen.screens {
                 guard let uuid = screen.displayUUID else { continue }
-                
+
                 if windows[uuid] == nil {
                     let viewModel = BoringViewModel(screenUUID: uuid)
                     let window = createBoringNotchWindow(for: screen, with: viewModel)

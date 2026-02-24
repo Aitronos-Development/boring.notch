@@ -60,14 +60,14 @@ struct AlbumArtView: View {
             Button {
                 musicManager.openMusicApp()
             } label: {
-                ZStack(alignment:.bottomTrailing) {
+                ZStack(alignment: .bottomTrailing) {
                     albumArtImage
                     appIconOverlay
                 }
             }
             .buttonStyle(PlainButtonStyle())
             .scaleEffect(musicManager.isPlaying ? 1 : 0.85)
-            
+
             albumArtDarkOverlay
         }
     }
@@ -79,7 +79,6 @@ struct AlbumArtView: View {
             .opacity(musicManager.isPlaying ? 0 : 0.8)
             .blur(radius: 50)
     }
-                
 
     private var albumArtImage: some View {
         Image(nsImage: musicManager.albumArt)
@@ -98,8 +97,7 @@ struct AlbumArtView: View {
     @ViewBuilder
     private var appIconOverlay: some View {
         if vm.notchState == .open && !musicManager.usingAppIconForArtwork {
-            AppIcon(for: musicManager.bundleIdentifier ?? "com.apple.Music")
-                .resizable()
+            AppIconView(bundleID: musicManager.bundleIdentifier ?? "com.apple.Music")
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 30, height: 30)
                 .offset(x: 10, y: 10)
@@ -213,7 +211,7 @@ struct MusicControlsView: View {
     private var slotToolbar: some View {
         let slots = activeSlots
         return HStack(spacing: 6) {
-            ForEach(Array(slots.enumerated()), id: \.offset) { index, slot in
+            ForEach(Array(slots.enumerated()), id: \.offset) { _, slot in
                 slotView(for: slot)
                     .frame(alignment: .center)
             }
@@ -228,8 +226,12 @@ struct MusicControlsView: View {
         )
         let padded = slotConfig.padded(to: sanitizedLimit, filler: .none)
         let result = Array(padded.prefix(sanitizedLimit))
-        // If calendar and camera are both visible alongside music, hide the edge slots
-        let shouldHideEdges = Defaults[.showCalendar] && Defaults[.showMirror] && webcamManager.cameraAvailable && vm.isCameraExpanded
+        // If multiple panels are visible alongside music, hide the edge slots to save space
+        let bothPanelsActive = Defaults[.showCalendar] && Defaults[.showTimeTracking]
+            && (TimeTrackingManager.shared.isTracking || TimeSlotSummaryManager.shared.hasPendingSlots || ActiveTaskManager.shared.activeTask != nil)
+            && Defaults[.notchExpandedLayout] == .sideBySide
+        let cameraWithCalendar = Defaults[.showCalendar] && Defaults[.showMirror] && webcamManager.cameraAvailable && vm.isCameraExpanded
+        let shouldHideEdges = bothPanelsActive || cameraWithCalendar
         if shouldHideEdges && result.count >= 5 {
             return Array(result.dropFirst().dropLast())
         }
@@ -334,7 +336,7 @@ struct VolumeControlView: View {
     @State private var showVolumeSlider: Bool = false
     @State private var lastVolumeUpdateTime: Date = Date.distantPast
     private let volumeUpdateThrottle: TimeInterval = 0.1
-    
+
     var body: some View {
         HStack(spacing: 4) {
             Button(action: {
@@ -399,8 +401,7 @@ struct VolumeControlView: View {
             // volumeUpdateTask?.cancel() // No longer needed
         }
     }
-    
-    
+
     private var volumeIcon: String {
         if !musicManager.volumeControlSupported {
             return "speaker.slash"
@@ -416,6 +417,43 @@ struct VolumeControlView: View {
     }
 }
 
+// MARK: - Status Bar (VPN + Device Agent)
+
+/// Compact status chips shown below the main Home content
+struct HomeStatusBar: View {
+    @ObservedObject var vpnManager = VpnManager.shared
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // VPN status chip
+            Button(action: {
+                BoringViewCoordinator.shared.currentView = .vpn
+            }) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(vpnManager.isConnected ? Color.green : Color.red.opacity(0.7))
+                        .frame(width: 6, height: 6)
+                    if vpnManager.isConnected, let server = vpnManager.serverName {
+                        Text("VPN: \(server)")
+                            .lineLimit(1)
+                    } else {
+                        Text("VPN: Off")
+                    }
+                }
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.white.opacity(0.05)))
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Spacer()
+        }
+        .padding(.top, 2)
+    }
+}
+
 // MARK: - Main View
 
 struct NotchHomeView: View {
@@ -423,12 +461,23 @@ struct NotchHomeView: View {
     @ObservedObject var webcamManager = WebcamManager.shared
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = BoringViewCoordinator.shared
+    @ObservedObject var timerManager = TimeTrackingManager.shared
+    @ObservedObject var slotSummaryManager = TimeSlotSummaryManager.shared
+    @ObservedObject var activeTaskManager = ActiveTaskManager.shared
+    @Default(.notchExpandedLayout) private var expandedLayout
+    @Default(.notchExpandedHeight) private var expandedHeight
     let albumArtNamespace: Namespace.ID
+
+    /// Height threshold: above this the calendar drops to a full-width row below
+    private static let calendarDropThreshold: CGFloat = 250
 
     var body: some View {
         Group {
             if !coordinator.firstLaunch {
-                mainContent
+                VStack(spacing: 0) {
+                    mainContent
+                    HomeStatusBar()
+                }
             }
         }
         // simplified: use a straightforward opacity transition
@@ -439,19 +488,70 @@ struct NotchHomeView: View {
         Defaults[.showMirror] && webcamManager.cameraAvailable && vm.isCameraExpanded
     }
 
-    private var mainContent: some View {
-        HStack(alignment: .top, spacing: (shouldShowCamera && Defaults[.showCalendar]) ? 10 : 15) {
-            MusicPlayerView(albumArtNamespace: albumArtNamespace)
+    // MARK: - Right Panel Helpers
 
-            if Defaults[.showCalendar] {
+    private var hasActiveTimer: Bool {
+        Defaults[.showTimeTracking] && timerManager.isTracking
+    }
+
+    private var hasActiveTask: Bool {
+        Defaults[.showTimeTracking] && !timerManager.isTracking && activeTaskManager.activeTask != nil
+    }
+
+    private var hasPendingSlots: Bool {
+        Defaults[.showTimeTracking] && !timerManager.isTracking && activeTaskManager.activeTask == nil && slotSummaryManager.hasPendingSlots
+    }
+
+    private var hasTimeTrackingContent: Bool {
+        hasActiveTimer || hasActiveTask || hasPendingSlots
+    }
+
+    private var hasCalendar: Bool {
+        Defaults[.showCalendar]
+    }
+
+    private var rightPanelItemCount: Int {
+        (hasTimeTrackingContent ? 1 : 0) + (hasCalendar ? 1 : 0)
+    }
+
+    private var singlePanelWidth: CGFloat {
+        shouldShowCamera ? 170 : 215
+    }
+
+    /// When height is large enough, calendar drops to full-width row below the top content
+    private var calendarDropsBelow: Bool {
+        hasCalendar && expandedHeight >= Self.calendarDropThreshold
+    }
+
+    // MARK: - Main Content
+
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            // Top row: Music + right panel(s) + camera
+            topRow
+
+            // Full-width calendar below when height is large enough
+            if calendarDropsBelow {
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                    .padding(.horizontal, 4)
+
                 CalendarView()
-                    .frame(width: shouldShowCamera ? 170 : 215)
-                    .onHover { isHovering in
-                        vm.isHoveringCalendar = isHovering
-                    }
+                    .onHover { vm.isHoveringCalendar = $0 }
                     .environmentObject(vm)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .transition(.opacity)
             }
+        }
+        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
+        .blur(radius: vm.notchState == .closed ? 30 : 0)
+    }
+
+    private var topRow: some View {
+        HStack(alignment: .top, spacing: rightPanelSpacing) {
+            MusicPlayerView(albumArtNamespace: albumArtNamespace)
+
+            rightPanelContent
 
             if shouldShowCamera {
                 CameraPreviewView(webcamManager: webcamManager)
@@ -461,8 +561,122 @@ struct NotchHomeView: View {
                     .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.76, blendDuration: 0), value: shouldShowCamera)
             }
         }
-        .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
-        .blur(radius: vm.notchState == .closed ? 30 : 0)
+    }
+
+    private var rightPanelSpacing: CGFloat {
+        if rightPanelItemCount > 1 && expandedLayout == .sideBySide && !calendarDropsBelow {
+            return 8
+        }
+        return (shouldShowCamera && hasCalendar && !calendarDropsBelow) ? 10 : 15
+    }
+
+    // MARK: - Right Panel Content
+
+    @ViewBuilder
+    private var rightPanelContent: some View {
+        if calendarDropsBelow {
+            // Calendar is in the bottom row — right panel only has time tracking (if any)
+            if hasTimeTrackingContent {
+                timeTrackingPanel
+                    .frame(width: singlePanelWidth)
+                    .transition(.opacity)
+            }
+        } else if rightPanelItemCount == 0 {
+            EmptyView()
+        } else if rightPanelItemCount == 1 {
+            singleRightPanel
+                .frame(width: singlePanelWidth)
+                .transition(.opacity)
+        } else {
+            // Two items active — use selected layout
+            switch expandedLayout {
+            case .sideBySide:
+                sideBySidePanel
+            case .stacked:
+                stackedPanel
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var timeTrackingPanel: some View {
+        if hasActiveTimer || hasActiveTask {
+            NotchTimerView()
+        } else {
+            NotchTimeTrackingView()
+        }
+    }
+
+    @ViewBuilder
+    private var singleRightPanel: some View {
+        if hasActiveTimer || hasActiveTask {
+            NotchTimerView()
+        } else if hasPendingSlots {
+            NotchTimeTrackingView()
+        } else if hasCalendar {
+            CalendarView()
+                .onHover { vm.isHoveringCalendar = $0 }
+                .environmentObject(vm)
+        }
+    }
+
+    // MARK: - Side by Side Layout
+
+    private var sideBySideItemWidth: CGFloat {
+        shouldShowCamera ? 130 : 155
+    }
+
+    private var sideBySidePanel: some View {
+        HStack(spacing: 8) {
+            // Time tracking / timer
+            Group {
+                if hasActiveTimer || hasActiveTask {
+                    NotchTimerView()
+                } else {
+                    NotchTimeTrackingView()
+                }
+            }
+            .frame(width: sideBySideItemWidth)
+            .transition(.opacity)
+
+            // Calendar
+            CalendarView()
+                .frame(width: sideBySideItemWidth)
+                .onHover { vm.isHoveringCalendar = $0 }
+                .environmentObject(vm)
+                .transition(.opacity)
+        }
+    }
+
+    // MARK: - Stacked Layout
+
+    private var stackedPanelWidth: CGFloat {
+        shouldShowCamera ? 200 : 240
+    }
+
+    private var stackedPanel: some View {
+        VStack(spacing: 4) {
+            // Top: Timer or Time Tracking
+            Group {
+                if hasActiveTimer || hasActiveTask {
+                    NotchTimerView()
+                } else {
+                    NotchTimeTrackingView()
+                }
+            }
+            .frame(maxHeight: .infinity)
+
+            Divider()
+                .background(Color.white.opacity(0.1))
+
+            // Bottom: Calendar
+            CalendarView()
+                .onHover { vm.isHoveringCalendar = $0 }
+                .environmentObject(vm)
+                .frame(maxHeight: .infinity)
+        }
+        .frame(width: stackedPanelWidth)
+        .transition(.opacity)
     }
 }
 
@@ -478,7 +692,6 @@ struct MusicSliderView: View {
     let playbackRate: Double
     let isPlaying: Bool
     var onValueChange: (Double) -> Void
-
 
     var body: some View {
         VStack {

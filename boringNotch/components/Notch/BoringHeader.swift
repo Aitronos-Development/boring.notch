@@ -13,6 +13,8 @@ struct BoringHeader: View {
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @StateObject var tvm = ShelfStateViewModel.shared
+    @State private var showHubMenu = false
+    @State private var showShareMenu = false
     var body: some View {
         HStack(spacing: 0) {
             HStack {
@@ -58,6 +60,58 @@ struct BoringHeader: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
+                        // Share button
+                        Button(action: {
+                            showShareMenu.toggle()
+                        }) {
+                            Capsule()
+                                .fill(.black)
+                                .frame(width: 30, height: 30)
+                                .overlay {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .foregroundColor(.white)
+                                        .padding()
+                                        .imageScale(.medium)
+                                }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .popover(isPresented: $showShareMenu, arrowEdge: .bottom) {
+                            NotchShareMenu()
+                        }
+                        .onChange(of: showShareMenu) { _, isOpen in
+                            if isOpen {
+                                SharingStateManager.shared.beginInteraction()
+                            } else {
+                                SharingStateManager.shared.endInteraction()
+                            }
+                        }
+
+                        // Hub Quick Menu button
+                        Button(action: {
+                            showHubMenu.toggle()
+                        }) {
+                            Capsule()
+                                .fill(.black)
+                                .frame(width: 30, height: 30)
+                                .overlay {
+                                    Image(systemName: "square.grid.2x2")
+                                        .foregroundColor(.white)
+                                        .padding()
+                                        .imageScale(.medium)
+                                }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .popover(isPresented: $showHubMenu, arrowEdge: .bottom) {
+                            HubQuickMenu()
+                        }
+                        .onChange(of: showHubMenu) { _, isOpen in
+                            if isOpen {
+                                SharingStateManager.shared.beginInteraction()
+                            } else {
+                                SharingStateManager.shared.endInteraction()
+                            }
+                        }
+
                         if Defaults[.settingsIconInNotch] {
                             Button(action: {
                                 SettingsWindowController.shared.showWindow()

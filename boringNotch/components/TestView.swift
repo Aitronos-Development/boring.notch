@@ -16,7 +16,7 @@ struct FluidSlider: View {
     @GestureState var isDragging: Bool = false
     @State var previousOffset: CGFloat = 0
     @State private var isBeating: Bool = false
-    
+
     var body: some View {
         HStack {
             slider
@@ -25,13 +25,13 @@ struct FluidSlider: View {
         .padding()
         .background(.black)
     }
-    
+
     private var slider: some View {
         ZStack {
             Canvas { context, size in
                 context.addFilter(.alphaThreshold(min: 0.5, max: 1, color: color))
                 context.addFilter(.blur(radius: 10))
-                
+
                 context.drawLayer { ctx in
                     if let rectangle = ctx.resolveSymbol(id: "Capsule") {
                         ctx.draw(rectangle, at: CGPoint(x: size.width/2, y: size.height/2))
@@ -44,7 +44,7 @@ struct FluidSlider: View {
                 Capsule()
                     .frame(width: rectSize2.width, height: rectSize2.height, alignment: .center)
                     .tag("Capsule")
-                
+
                 Circle()
                     .frame(width: circleSize, height: circleSize, alignment: .center)
                     .offset(x: offset)
@@ -59,7 +59,7 @@ struct FluidSlider: View {
                     .onChanged({ value in
                         self.offset = min(max(self.previousOffset + value.translation.width, 0), rectSize2.width - circleSize)
                     })
-                    .onEnded({ value in
+                    .onEnded({ _ in
                         self.previousOffset = self.offset
                     })
             )
@@ -76,12 +76,11 @@ struct FluidSlider: View {
                 .allowsHitTesting(false)
         }
     }
-    
-    
+
     private var animation: Animation {
         .spring(response: 0.5, dampingFraction: 0.6, blendDuration: 0.5)
     }
-    
+
     private var percentage: Int {
         Int((offset) / (rectSize.width - circleSize) * 100)
     }

@@ -8,12 +8,11 @@
 import SwiftUI
 import Defaults
 
-
 struct MusicControllerSelectionView: View {
     let onContinue: () -> Void
 
     @Default(.mediaController) var mediaController
-    
+
     private var availableMediaControllers: [MediaControllerType] {
         if MusicManager.shared.isNowPlayingDeprecated {
             return MediaControllerType.allCases.filter { $0 != .nowPlaying }
@@ -21,9 +20,9 @@ struct MusicControllerSelectionView: View {
             return MediaControllerType.allCases
         }
     }
-    
+
     @State private var selectedMediaController: MediaControllerType = Defaults[.mediaController]
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Text("Choose a Music Source")
@@ -51,7 +50,7 @@ struct MusicControllerSelectionView: View {
                 }
                 .padding()
             }
-            //Disable scroll if there are 4 or fewer to avoid unnecessary scroll behavior
+            // Disable scroll if there are 4 or fewer to avoid unnecessary scroll behavior
             .scrollDisabled(availableMediaControllers.count <= 4)
 
 //            Spacer()
@@ -95,14 +94,14 @@ struct ControllerOptionView: View {
                 Text(controller.description)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                
+
                 if controller == .youtubeMusic, let url = URL(string: "https://github.com/pear-devs/pear-desktop") {
                     Link("View on GitHub: pear-devs/pear-desktop", destination: url)
                         .font(.subheadline)
                         .padding(.top, 2)
                 }
             }
-            
+
             Spacer()
         }
         .padding()
@@ -117,7 +116,6 @@ struct ControllerOptionView: View {
         .contentShape(Rectangle())
     }
 }
-
 
 extension MediaControllerType {
     var description: String {

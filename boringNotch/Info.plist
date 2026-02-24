@@ -7,14 +7,16 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<!-- Sparkle auto-update disabled for Aitronos fork -->
+	<!-- To enable updates, set up your own appcast feed and update these keys -->
+	<!--
 	<key>SUEnableDownloaderService</key>
-	<true/>
+	<false/>
 	<key>SUEnableInstallerLauncherService</key>
-	<true/>
-	<key>SUFeedURL</key>
-	<string>https://TheBoredTeam.github.io/boring.notch/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>B1Y47t8C/v8ImurYA+9arEsuCrpxwJSviekiflMElbI=</string>
+	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	-->
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict/>

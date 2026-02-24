@@ -14,7 +14,20 @@ let batterySneakSize: CGSize = .init(width: 160, height: 1)
 
 let shadowPadding: CGFloat = 20
 let openNotchSize: CGSize = .init(width: 640, height: 190)
-let windowSize: CGSize = .init(width: openNotchSize.width, height: openNotchSize.height + shadowPadding)
+/// Window must be tall enough for the tallest possible content (team up to 500pt, VPN 280pt).
+/// The window is transparent and borderless, so extra height has no visual impact —
+/// SwiftUI content controls what is actually visible via frame constraints.
+let windowSize: CGSize = .init(width: openNotchSize.width, height: 500 + shadowPadding)
+
+/// Dynamic open size for the team view — reads from user preference
+var teamOpenNotchSize: CGSize {
+    .init(width: 640, height: Defaults[.teamMaxNotchHeight])
+}
+
+/// Window size when team view is active
+var teamWindowSize: CGSize {
+    .init(width: teamOpenNotchSize.width, height: teamOpenNotchSize.height + shadowPadding)
+}
 let cornerRadiusInsets: (opened: (top: CGFloat, bottom: CGFloat), closed: (top: CGFloat, bottom: CGFloat)) = (opened: (top: 19, bottom: 24), closed: (top: 6, bottom: 14))
 
 enum MusicPlayerImageSizes {
@@ -28,11 +41,11 @@ enum MusicPlayerImageSizes {
     if let uuid = screenUUID {
         selectedScreen = NSScreen.screen(withUUID: uuid)
     }
-    
+
     if let screen = selectedScreen {
         return screen.frame
     }
-    
+
     return nil
 }
 
@@ -51,8 +64,7 @@ enum MusicPlayerImageSizes {
     if let screen = selectedScreen {
         // Calculate and set the exact width of the notch
         if let topLeftNotchpadding: CGFloat = screen.auxiliaryTopLeftArea?.width,
-           let topRightNotchpadding: CGFloat = screen.auxiliaryTopRightArea?.width
-        {
+           let topRightNotchpadding: CGFloat = screen.auxiliaryTopRightArea?.width {
             notchWidth = screen.frame.width - topLeftNotchpadding - topRightNotchpadding + 4
         }
 

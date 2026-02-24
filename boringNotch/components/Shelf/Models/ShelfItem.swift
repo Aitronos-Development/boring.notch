@@ -49,7 +49,7 @@ enum ShelfItemKind: Codable, Equatable, Sendable {
 }
 
 @MainActor
-struct ShelfItem: Identifiable, Codable, Equatable, Sendable {
+struct ShelfItem: Identifiable, Codable, Equatable {
     let id: UUID
     var kind: ShelfItemKind
     var isTemporary: Bool
@@ -58,13 +58,13 @@ struct ShelfItem: Identifiable, Codable, Equatable, Sendable {
         self.kind = kind
         self.isTemporary = isTemporary
     }
-    
+
     var displayName: String {
         switch kind {
         case .file(let bookmarkData):
             let bookmark = Bookmark(data: bookmarkData)
             guard let resolvedURL = bookmark.resolveURL() else { return "" }
-            
+
             // Check for stored data files (text blocks, weblocs, etc.) to provide friendly names
             if resolvedURL.pathExtension.lowercased() == "json" && resolvedURL.path.contains("TextBlocks") {
                 do {
@@ -117,18 +117,16 @@ struct ShelfItem: Identifiable, Codable, Equatable, Sendable {
             }
         }
     }
-    
+
     var fileURL: URL? {
         guard case .file = kind else { return nil }
         return ShelfStateViewModel.shared.resolveFileURL(for: self)
     }
-    
+
     var URL: URL? {
-        if case let .file(bookmark) = kind { return resolvedContext(for: bookmark)?.url }
-        else if case let .link(url) = kind { return url }
-        else { return nil }
+        if case let .file(bookmark) = kind { return resolvedContext(for: bookmark)?.url } else if case let .link(url) = kind { return url } else { return nil }
     }
-    
+
     var icon: NSImage {
         guard case .file = kind else {
             return Self.thumbnailSymbolImage(systemName: kind.iconSymbolName) ?? NSImage()
@@ -138,14 +136,13 @@ struct ShelfItem: Identifiable, Codable, Equatable, Sendable {
         }
         return NSImage()
     }
-    
 
     func cleanupStoredData() {
         guard case let .file(bookmark) = kind,
               let context = resolvedContext(for: bookmark) else { return }
-        
+
         let url = context.url
-        
+
         // Handle temporary files
         if isTemporary {
             TemporaryFileStorageService.shared.removeTemporaryFileIfNeeded(at: url)
@@ -157,7 +154,7 @@ struct ShelfItem: Identifiable, Codable, Equatable, Sendable {
 private extension ShelfItem {
    static func thumbnailSymbolImage(
         systemName: String,
-    size: CGSize = CGSize(width: 64, height: 80), 
+    size: CGSize = CGSize(width: 64, height: 80),
     symbolPointSize: CGFloat = 38,
     backgroundColor: NSColor = NSColor.white,
     symbolColor: NSColor = NSColor.labelColor

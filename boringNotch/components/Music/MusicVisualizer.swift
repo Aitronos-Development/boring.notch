@@ -13,13 +13,13 @@ class AudioSpectrum: NSView {
     private var barScales: [CGFloat] = []
     private var isPlaying: Bool = true
     private var animationTimer: Timer?
-    
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         setupBars()
     }
-    
+
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         wantsLayer = true
@@ -53,20 +53,20 @@ class AudioSpectrum: NSView {
             layer?.addSublayer(barLayer)
         }
     }
-    
+
     private func startAnimating() {
         guard animationTimer == nil else { return }
         animationTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
             self?.updateBars()
         }
     }
-    
+
     private func stopAnimating() {
         animationTimer?.invalidate()
         animationTimer = nil
         resetBars()
     }
-    
+
     private func updateBars() {
         for (i, barLayer) in barLayers.enumerated() {
             let currentScale = barScales[i]
@@ -85,7 +85,7 @@ class AudioSpectrum: NSView {
             barLayer.add(animation, forKey: "scaleY")
         }
     }
-    
+
     private func resetBars() {
         for (i, barLayer) in barLayers.enumerated() {
             barLayer.removeAllAnimations()
@@ -93,7 +93,7 @@ class AudioSpectrum: NSView {
             barScales[i] = 0.35
         }
     }
-    
+
     func setPlaying(_ playing: Bool) {
         isPlaying = playing
         if isPlaying {
@@ -106,13 +106,13 @@ class AudioSpectrum: NSView {
 
 struct AudioSpectrumView: NSViewRepresentable {
     @Binding var isPlaying: Bool
-    
+
     func makeNSView(context: Context) -> AudioSpectrum {
         let spectrum = AudioSpectrum()
         spectrum.setPlaying(isPlaying)
         return spectrum
     }
-    
+
     func updateNSView(_ nsView: AudioSpectrum, context: Context) {
         nsView.setPlaying(isPlaying)
     }

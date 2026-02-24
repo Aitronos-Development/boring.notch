@@ -62,7 +62,7 @@ struct WheelPicker: View {
         .scrollTargetBehavior(.viewAligned)  // Ensures scroll view snaps the centered view
         .safeAreaPadding(.horizontal)
         .sensoryFeedback(.alignment, trigger: haptics)
-        .onChange(of: scrollPosition) { oldValue, newValue in
+        .onChange(of: scrollPosition) { _, newValue in
             if !byClick {
                 handleScrollChange(newValue: newValue, config: config)
             } else {
@@ -224,7 +224,7 @@ struct CalendarView: View {
             }
         }
         .listRowBackground(Color.clear)
-        .frame(height: 120)
+        .frame(maxHeight: .infinity)
         .onChange(of: selectedDate) {
             Task {
                 await calendarManager.updateCurrentDate(selectedDate)
@@ -247,7 +247,7 @@ struct CalendarView: View {
 
 struct EmptyEventsView: View {
     let selectedDate: Date
-    
+
     var body: some View {
         VStack {
             Image(systemName: "calendar.badge.checkmark")
@@ -269,7 +269,6 @@ struct EventListView: View {
     let events: [EventModel]
     @Default(.autoScrollToNextEvent) private var autoScrollToNextEvent
     @Default(.showFullEventTitles) private var showFullEventTitles
-
 
     static func filteredEvents(events: [EventModel]) -> [EventModel] {
         events.filter { event in

@@ -33,6 +33,9 @@ struct SettingsView: View {
                 NavigationLink(value: "Appearance") {
                     Label("Appearance", systemImage: "eye")
                 }
+                NavigationLink(value: "Layout") {
+                    Label("Layout", systemImage: "rectangle.split.2x1")
+                }
                 NavigationLink(value: "Media") {
                     Label("Media", systemImage: "play.laptopcomputer")
                 }
@@ -48,6 +51,15 @@ struct SettingsView: View {
 //                NavigationLink(value: "Downloads") {
 //                    Label("Downloads", systemImage: "square.and.arrow.down")
 //                }
+                NavigationLink(value: "Team") {
+                    Label("Team", systemImage: "person.2")
+                }
+                NavigationLink(value: "TimeTracking") {
+                    Label("Time Tracking", systemImage: "timer")
+                }
+                NavigationLink(value: "VPN") {
+                    Label("VPN", systemImage: "shield.lefthalf.filled")
+                }
                 NavigationLink(value: "Shelf") {
                     Label("Shelf", systemImage: "books.vertical")
                 }
@@ -75,6 +87,8 @@ struct SettingsView: View {
                     GeneralSettings()
                 case "Appearance":
                     Appearance()
+                case "Layout":
+                    LayoutSettings()
                 case "Media":
                     Media()
                 case "Calendar":
@@ -83,6 +97,12 @@ struct SettingsView: View {
                     HUD()
                 case "Battery":
                     Charge()
+                case "Team":
+                    TeamSettings()
+                case "TimeTracking":
+                    TimeTrackingSettings()
+                case "VPN":
+                    VpnSettings()
                 case "Shelf":
                     Shelf()
                 case "Shortcuts":
@@ -147,7 +167,6 @@ struct GeneralSettings: View {
     @Default(.automaticallySwitchDisplay) var automaticallySwitchDisplay
     @Default(.enableGestures) var enableGestures
     @Default(.openNotchOnHover) var openNotchOnHover
-    
 
     var body: some View {
         Form {
@@ -179,7 +198,7 @@ struct GeneralSettings: View {
                     }
                 }
                 .disabled(showOnAllDisplays)
-                
+
                 Defaults.Toggle(key: .automaticallySwitchDisplay) {
                     Text("Automatically switch displays")
                 }
@@ -348,6 +367,104 @@ struct GeneralSettings: View {
     }
 }
 
+struct TeamSettings: View {
+    @Default(.teamMaxNotchHeight) var teamMaxNotchHeight
+    @Default(.showTeamInClosedNotch) var showTeamInClosedNotch
+    @Default(.showTeamOnlineCount) var showTeamOnlineCount
+    @Default(.secureBinDefaultEnabled) var secureBinDefaultEnabled
+    @Default(.secureBinExpire) var secureBinExpire
+    @Default(.secureBinBurnAfterReading) var secureBinBurnAfterReading
+    @Default(.secureBinRequirePassword) var secureBinRequirePassword
+
+    var body: some View {
+        Form {
+            Section {
+                Defaults.Toggle(key: .showTeamInClosedNotch) {
+                    Text("Show team info in closed notch")
+                }
+                Defaults.Toggle(key: .showTeamOnlineCount) {
+                    Text("Show online count")
+                }
+                .disabled(!showTeamInClosedNotch)
+            } header: {
+                Text("Closed notch")
+            } footer: {
+                Text("When no music is playing, the closed notch shows how many team members are online and your current status.")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+
+            Section {
+                Slider(value: $teamMaxNotchHeight, in: 190...500, step: 10) {
+                    HStack {
+                        Text("Team panel height")
+                        Spacer()
+                        Text("\(teamMaxNotchHeight, specifier: "%.0f") pt")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Open notch")
+            } footer: {
+                Text("The team panel uses a taller notch to show more members. Other views (music, shelf) keep the default 190pt height.")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+
+            Section {
+                Defaults.Toggle(key: .secureBinDefaultEnabled) {
+                    Text("Encrypt messages by default")
+                }
+                Picker("Expiry", selection: $secureBinExpire) {
+                    Text("5 minutes").tag("5min")
+                    Text("10 minutes").tag("10min")
+                    Text("1 hour").tag("1hour")
+                    Text("1 day").tag("1day")
+                    Text("1 week").tag("1week")
+                    Text("1 month").tag("1month")
+                    Text("Never").tag("never")
+                }
+                Defaults.Toggle(key: .secureBinBurnAfterReading) {
+                    Text("Self-destruct after reading")
+                }
+                Defaults.Toggle(key: .secureBinRequirePassword) {
+                    Text("Require password")
+                }
+            } header: {
+                Text("Encrypted messages")
+            } footer: {
+                Text("Encrypted messages are sent as self-destructing SecureBin links via iMessage. When a password is required, it will be generated and shown to you after sending.")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+        }
+        .accentColor(.effectiveAccent)
+        .navigationTitle("Team")
+    }
+}
+
+struct VpnSettings: View {
+    @Default(.showVpnInClosedNotch) var showVpnInClosedNotch
+
+    var body: some View {
+        Form {
+            Section {
+                Defaults.Toggle(key: .showVpnInClosedNotch) {
+                    Text("Show VPN status in closed notch")
+                }
+            } header: {
+                Text("Closed notch")
+            } footer: {
+                Text("When no music is playing and no team members are shown, the closed notch displays VPN download and upload speeds.")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+        }
+        .accentColor(.effectiveAccent)
+        .navigationTitle("VPN")
+    }
+}
+
 struct Charge: View {
     var body: some View {
         Form {
@@ -382,7 +499,7 @@ struct Charge: View {
     }
 }
 
-//struct Downloads: View {
+// struct Downloads: View {
 //    @Default(.selectedDownloadIndicatorStyle) var selectedDownloadIndicatorStyle
 //    @Default(.selectedDownloadIconStyle) var selectedDownloadIconStyle
 //    var body: some View {
@@ -460,7 +577,7 @@ struct Charge: View {
 //        }
 //        .navigationTitle("Downloads")
 //    }
-//}
+// }
 
 struct HUD: View {
     @EnvironmentObject var vm: BoringViewModel
@@ -470,7 +587,7 @@ struct HUD: View {
     @Default(.hudReplacement) var hudReplacement
     @ObservedObject var coordinator = BoringViewCoordinator.shared
     @State private var accessibilityAuthorized = false
-    
+
     var body: some View {
         Form {
             Section {
@@ -490,7 +607,7 @@ struct HUD: View {
                     .controlSize(.large)
                     .disabled(!accessibilityAuthorized)
                 }
-                
+
                 if !accessibilityAuthorized {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Accessibility access is required to replace the system HUD.")
@@ -507,14 +624,14 @@ struct HUD: View {
                     .padding(.top, 6)
                 }
             }
-            
+
             Section {
                 Picker("Option key behaviour", selection: $optionKeyAction) {
                     ForEach(OptionKeyAction.allCases) { opt in
                         Text(opt.rawValue).tag(opt)
                     }
                 }
-                
+
                 Picker("Progress bar style", selection: $enableGradient) {
                     Text("Hierarchical")
                         .tag(false)
@@ -531,7 +648,7 @@ struct HUD: View {
                 Text("General")
             }
             .disabled(!hudReplacement)
-            
+
             Section {
                 Defaults.Toggle(key: .showOpenNotchHUD) {
                     Text("Show HUD in open notch")
@@ -547,7 +664,7 @@ struct HUD: View {
                 }
             }
             .disabled(!hudReplacement)
-            
+
             Section {
                 Picker("HUD style", selection: $inlineHUD) {
                     Text("Default")
@@ -563,7 +680,7 @@ struct HUD: View {
                         }
                     }
                 }
-                
+
                 Defaults.Toggle(key: .showClosedNotchHUDPercentage) {
                     Text("Show percentage")
                 }
@@ -638,7 +755,7 @@ struct Media: View {
                     .font(.caption)
                 }
             }
-            
+
             Section {
                 Toggle(
                     "Show music live activity",
@@ -676,7 +793,7 @@ struct Media: View {
             } header: {
                 Text("Media playback live activity")
             }
-            
+
             Section {
                 MusicSlotConfigurationView()
                 Defaults.Toggle(key: .enableLyrics) {
@@ -817,7 +934,7 @@ struct CalendarSettings: View {
 
 func lighterColor(from nsColor: NSColor, amount: CGFloat = 0.14) -> Color {
     let srgb = nsColor.usingColorSpace(.sRGB) ?? nsColor
-    var (r, g, b, a): (CGFloat, CGFloat, CGFloat, CGFloat) = (0,0,0,0)
+    var (r, g, b, a): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
     srgb.getRed(&r, green: &g, blue: &b, alpha: &a)
 
     func lighten(_ c: CGFloat) -> CGFloat {
@@ -870,7 +987,7 @@ struct About: View {
                 HStack(spacing: 30) {
                     Spacer(minLength: 0)
                     Button {
-                        if let url = URL(string: "https://github.com/TheBoredTeam/boring.notch") {
+                        if let url = URL(string: "https://github.com/aitronos/aitronos.hub") {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {
@@ -889,7 +1006,7 @@ struct About: View {
             }
             VStack(spacing: 0) {
                 Divider()
-                Text("Made with 🫶🏻 by not so boring not.people")
+                Text("Aitronos Notch • Built for Remote Teams")
                     .foregroundStyle(.secondary)
                     .padding(.top, 5)
                     .padding(.bottom, 7)
@@ -910,7 +1027,7 @@ struct About: View {
 }
 
 struct Shelf: View {
-    
+
     @Default(.shelfTapToOpen) var shelfTapToOpen: Bool
     @Default(.quickShareProvider) var quickShareProvider
     @Default(.expandedDragDetection) var expandedDragDetection: Bool
@@ -919,11 +1036,11 @@ struct Shelf: View {
     private var selectedProvider: QuickShareProvider? {
         quickShareService.availableProviders.first(where: { $0.id == quickShareProvider })
     }
-    
+
     init() {
         Task { await QuickShareService.shared.discoverAvailableProviders() }
     }
-    
+
     var body: some View {
         Form {
             Section {
@@ -954,7 +1071,7 @@ struct Shelf: View {
                     Text("General")
                 }
             }
-            
+
             Section {
                 Picker("Quick Share Service", selection: $quickShareProvider) {
                     ForEach(quickShareService.availableProviders, id: \.id) { provider in
@@ -976,7 +1093,7 @@ struct Shelf: View {
                     }
                 }
                 .pickerStyle(.menu)
-                
+
                 if let selectedProvider = selectedProvider {
                     HStack {
                         Group {
@@ -1002,7 +1119,7 @@ struct Shelf: View {
                     .padding(.vertical, 4)
                 }
                 // Providers are always enabled; user can pick default service above.
-                
+
             } header: {
                 HStack {
                     Text("Quick Share")
@@ -1018,7 +1135,7 @@ struct Shelf: View {
     }
 }
 
-//struct Extensions: View {
+// struct Extensions: View {
 //    @State private var effectTrigger: Bool = false
 //    var body: some View {
 //        Form {
@@ -1155,7 +1272,7 @@ struct Shelf: View {
 //        // TipsView()
 //        // .padding(.horizontal, 19)
 //    }
-//}
+// }
 
 struct Appearance: View {
     @ObservedObject var coordinator = BoringViewCoordinator.shared
@@ -1167,7 +1284,7 @@ struct Appearance: View {
 
     let icons: [String] = ["logo2"]
     @State private var selectedIcon: String = "logo2"
-    @State private var selectedListVisualizer: CustomVisualizer? = nil
+    @State private var selectedListVisualizer: CustomVisualizer?
     @State private var isPresented: Bool = false
     @State private var name: String = ""
     @State private var url: String = ""
@@ -1378,7 +1495,7 @@ struct Appearance: View {
 
             Section {
                 Defaults.Toggle(key: .showMirror) {
-                    Text("Enable boring mirror")
+                    Text("Enable webcam mirror")
                 }
                     .disabled(!checkVideoInput())
                 Picker("Mirror shape", selection: $mirrorShape) {
@@ -1415,12 +1532,12 @@ struct Advanced: View {
     @Default(.extendHoverArea) var extendHoverArea
     @Default(.showOnLockScreen) var showOnLockScreen
     @Default(.hideFromScreenRecording) var hideFromScreenRecording
-    
+
     @State private var customAccentColor: Color = .accentColor
-    @State private var selectedPresetColor: PresetAccentColor? = nil
+    @State private var selectedPresetColor: PresetAccentColor?
     let icons: [String] = ["logo2"]
     @State private var selectedIcon: String = "logo2"
-    
+
     // macOS accent colors
     enum PresetAccentColor: String, CaseIterable, Identifiable {
         case blue = "Blue"
@@ -1431,9 +1548,9 @@ struct Advanced: View {
         case yellow = "Yellow"
         case green = "Green"
         case graphite = "Graphite"
-        
+
         var id: String { self.rawValue }
-        
+
         var color: Color {
             switch self {
             case .blue: return Color(red: 0.0, green: 0.478, blue: 1.0)
@@ -1447,7 +1564,7 @@ struct Advanced: View {
             }
         }
     }
-    
+
     var body: some View {
         Form {
             Section {
@@ -1458,7 +1575,7 @@ struct Advanced: View {
                         Text("Custom").tag(true)
                     }
                     .pickerStyle(.segmented)
-                    
+
                     if !useCustomAccentColor {
                         // System accent info
                         VStack(alignment: .leading, spacing: 8) {
@@ -1468,7 +1585,7 @@ struct Advanced: View {
                                     color: .accentColor,
                                     isSystemDefault: true
                                 ) {}
-                                
+
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Using System Accent")
                                         .font(.body)
@@ -1486,7 +1603,7 @@ struct Advanced: View {
                                 .font(.caption)
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.secondary)
-                            
+
                             HStack(spacing: 12) {
                                 ForEach(PresetAccentColor.allCases) { preset in
                                     AccentCircleButton(
@@ -1502,10 +1619,10 @@ struct Advanced: View {
                                 }
                                 Spacer()
                             }
-                            
+
                             Divider()
                                 .padding(.vertical, 4)
-                            
+
                             // Custom color picker
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -1515,9 +1632,9 @@ struct Advanced: View {
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
-                                
+
                                 Spacer()
-                                
+
                                 ColorPicker(selection: Binding(
                                     get: { customAccentColor },
                                     set: { newColor in
@@ -1531,7 +1648,7 @@ struct Advanced: View {
                                         Circle()
                                             .fill(customAccentColor)
                                             .frame(width: 32, height: 32)
-                                        
+
                                         if selectedPresetColor == nil {
                                             Circle()
                                                 .strokeBorder(.primary.opacity(0.3), lineWidth: 2)
@@ -1556,7 +1673,7 @@ struct Advanced: View {
             .onAppear {
                 initializeAccentColorState()
             }
-            
+
             Section {
                 Defaults.Toggle(key: .enableShadow) {
                     Text("Enable window shadow")
@@ -1567,7 +1684,7 @@ struct Advanced: View {
             } header: {
                 Text("Window Appearance")
             }
-            
+
             Section {
                 HStack {
                     ForEach(icons, id: \.self) { icon in
@@ -1611,7 +1728,7 @@ struct Advanced: View {
                     customBadge(text: "Coming soon")
                 }
             }
-            
+
             Section {
                 Defaults.Toggle(key: .extendHoverArea) {
                     Text("Extend hover area")
@@ -1635,14 +1752,14 @@ struct Advanced: View {
             loadCustomColor()
         }
     }
-    
+
     private func forceUiUpdate() {
         // Force refresh the UI
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: Notification.Name("AccentColorChanged"), object: nil)
         }
     }
-    
+
     private func saveCustomColor(_ color: Color) {
         let nsColor = NSColor(color)
         if let colorData = try? NSKeyedArchiver.archivedData(withRootObject: nsColor, requiringSecureCoding: false) {
@@ -1650,12 +1767,12 @@ struct Advanced: View {
             forceUiUpdate()
         }
     }
-    
+
     private func loadCustomColor() {
         if let colorData = Defaults[.customAccentColorData],
            let nsColor = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSColor.self, from: colorData) {
             customAccentColor = Color(nsColor: nsColor)
-            
+
             // Check if loaded color matches a preset
             selectedPresetColor = nil
             for preset in PresetAccentColor.allCases {
@@ -1666,16 +1783,16 @@ struct Advanced: View {
             }
         }
     }
-    
+
     private func colorsAreEqual(_ color1: Color, _ color2: Color) -> Bool {
         let nsColor1 = NSColor(color1).usingColorSpace(.sRGB) ?? NSColor(color1)
         let nsColor2 = NSColor(color2).usingColorSpace(.sRGB) ?? NSColor(color2)
-        
+
         return abs(nsColor1.redComponent - nsColor2.redComponent) < 0.01 &&
                abs(nsColor1.greenComponent - nsColor2.greenComponent) < 0.01 &&
                abs(nsColor1.blueComponent - nsColor2.blueComponent) < 0.01
     }
-    
+
     private func initializeAccentColorState() {
         if !useCustomAccentColor {
             selectedPresetColor = nil // Multicolor is selected when useCustomAccentColor is false
@@ -1692,7 +1809,7 @@ struct AccentCircleButton: View {
     var isSystemDefault: Bool = false
     var isMulticolor: Bool = false
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             ZStack {
@@ -1700,12 +1817,12 @@ struct AccentCircleButton: View {
                 Circle()
                     .fill(color)
                     .frame(width: 32, height: 32)
-                
+
                 // Subtle border
                 Circle()
                     .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
                     .frame(width: 32, height: 32)
-                
+
                 // Apple-style highlight ring around the middle when selected
                 if isSelected {
                     Circle()
@@ -1791,6 +1908,155 @@ func warningBadge(_ text: String, _ description: String) -> some View {
             }
             Spacer()
         }
+    }
+}
+
+// MARK: - Layout Settings
+
+struct LayoutSettings: View {
+    @Default(.notchExpandedLayout) var expandedLayout: NotchExpandedLayout
+    @Default(.showCalendar) var showCalendar: Bool
+    @Default(.showTimeTracking) var showTimeTracking: Bool
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Expanded layout", selection: $expandedLayout) {
+                    ForEach(NotchExpandedLayout.allCases, id: \.self) { layout in
+                        Text(layout.rawValue).tag(layout)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("Notch Layout")
+            } footer: {
+                Text(layoutDescription)
+            }
+
+            Section {
+                layoutPreview
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            } header: {
+                Text("Preview")
+            }
+
+            Section {
+                Defaults.Toggle(key: .showCalendar) {
+                    Label("Calendar", systemImage: "calendar")
+                }
+                Defaults.Toggle(key: .showTimeTracking) {
+                    Label("Time Tracking", systemImage: "timer")
+                }
+            } header: {
+                Text("Panels")
+            } footer: {
+                Text("Enable both to use the selected layout. With only one panel enabled, it uses the full width.")
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Layout")
+    }
+
+    private var layoutDescription: String {
+        switch expandedLayout {
+        case .sideBySide:
+            return "Calendar and time tracking shown next to each other horizontally."
+        case .stacked:
+            return "Time tracking on top, calendar below."
+        }
+    }
+
+    // MARK: - Visual Preview
+
+    private var layoutPreview: some View {
+        HStack(spacing: 0) {
+            // Music player mock
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    VStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.white.opacity(0.1))
+                            .frame(width: 36, height: 36)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.white.opacity(0.06))
+                            .frame(width: 50, height: 4)
+                    }
+                )
+                .frame(width: 80, height: 70)
+
+            Spacer().frame(width: 8)
+
+            // Right panel mock
+            switch expandedLayout {
+            case .sideBySide:
+                sideBySidePreview
+            case .stacked:
+                stackedPreview
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.black.opacity(0.4))
+        )
+    }
+
+    private var sideBySidePreview: some View {
+        HStack(spacing: 6) {
+            panelMock(icon: "timer", label: "Time", color: .orange, active: showTimeTracking)
+            panelMock(icon: "calendar", label: "Calendar", color: .blue, active: showCalendar)
+        }
+    }
+
+    private var stackedPreview: some View {
+        VStack(spacing: 4) {
+            panelMock(icon: "timer", label: "Time Tracking", color: .orange, active: showTimeTracking)
+            panelMock(icon: "calendar", label: "Calendar", color: .blue, active: showCalendar)
+        }
+        .frame(width: 110)
+    }
+
+    private func panelMock(icon: String, label: String, color: Color, active: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(active ? color.opacity(0.15) : Color.white.opacity(0.03))
+            .overlay(
+                VStack(spacing: 3) {
+                    Image(systemName: icon)
+                        .font(.system(size: 10))
+                        .foregroundStyle(active ? color : .gray.opacity(0.3))
+                    Text(label)
+                        .font(.system(size: 8))
+                        .foregroundStyle(active ? .white.opacity(0.6) : .gray.opacity(0.3))
+                }
+            )
+            .frame(minWidth: 50, maxWidth: .infinity, minHeight: 28, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Time Tracking Settings
+
+struct TimeTrackingSettings: View {
+    @Default(.showTimeTracking) var showTimeTracking: Bool
+    @Default(.showTimeTrackingInClosedNotch) var showTimeTrackingInClosedNotch: Bool
+
+    var body: some View {
+        Form {
+            Section {
+                Defaults.Toggle(key: .showTimeTracking) {
+                    Text("Show Time Tracking tab")
+                }
+                Defaults.Toggle(key: .showTimeTrackingInClosedNotch) {
+                    Text("Show pending slots in closed notch")
+                }
+            } header: {
+                Text("Time Tracking")
+            } footer: {
+                Text("Shows time tracking timeline and pending slot notifications in the notch. Requires Aitronos Hub to be running.")
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 

@@ -25,7 +25,7 @@ class BoringViewModel: NSObject, ObservableObject {
     @Published var dropEvent: Bool = false
     @Published var anyDropZoneTargeting: Bool = false
     var cancellables: Set<AnyCancellable> = []
-    
+
     @Published var hideOnClosed: Bool = true
 
     @Published var edgeAutoOpenActive: Bool = false
@@ -36,11 +36,11 @@ class BoringViewModel: NSObject, ObservableObject {
 
     @Published var notchSize: CGSize = getClosedNotchSize()
     @Published var closedNotchSize: CGSize = getClosedNotchSize()
-    
+
     let webcamManager = WebcamManager.shared
     @Published var isCameraExpanded: Bool = false
     @Published var isRequestingAuthorization: Bool = false
-    
+
     deinit {
         destroy()
     }
@@ -54,7 +54,7 @@ class BoringViewModel: NSObject, ObservableObject {
         animation = animationLibrary.animation
 
         super.init()
-        
+
         self.screenUUID = screenUUID
         notchSize = getClosedNotchSize(screenUUID: screenUUID)
         closedNotchSize = notchSize
@@ -65,10 +65,10 @@ class BoringViewModel: NSObject, ObservableObject {
             }
             .assign(to: \.anyDropZoneTargeting, on: self)
             .store(in: &cancellables)
-        
+
         setupDetectorObserver()
     }
-    
+
     private func setupDetectorObserver() {
         // Publisher for the user’s fullscreen detection setting
         let enabledPublisher = Defaults
@@ -175,24 +175,25 @@ class BoringViewModel: NSObject, ObservableObject {
             break
         }
     }
-    
+
     func isMouseHovering(position: NSPoint = NSEvent.mouseLocation) -> Bool {
         let screenFrame = getScreenFrame(screenUUID)
         if let frame = screenFrame {
-            
+
             let baseY = frame.maxY - notchSize.height
             let baseX = frame.midX - notchSize.width / 2
-            
+
             return position.y >= baseY && position.x >= baseX && position.x <= baseX + notchSize.width
         }
-        
+
         return false
     }
 
-    func open() {
-        self.notchSize = openNotchSize
+    func open(height: CGFloat? = nil) {
+        let size = CGSize(width: openNotchSize.width, height: height ?? openNotchSize.height)
+        self.notchSize = size
         self.notchState = .open
-        
+
         // Force music information update when notch is opened
         MusicManager.shared.forceUpdate()
     }

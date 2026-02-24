@@ -1,4 +1,4 @@
-    //
+//
     //  SystemEventIndicatorModifier.swift
     //  boringNotch
     //
@@ -22,10 +22,10 @@ struct SystemEventIndicatorModifier: View {
     @Binding var icon: String
     let showSlider: Bool = false
     var sendEventBack: (CGFloat) -> Void
-    
+
     var body: some View {
         HStack(spacing: 14) {
-            switch (eventType) {
+            switch eventType {
                 case .volume:
                     if icon.isEmpty {
                         Image(systemName: SpeakerSymbol(value))
@@ -58,7 +58,7 @@ struct SystemEventIndicatorModifier: View {
                 default:
                     EmptyView()
             }
-            if (eventType != .mic) {
+            if eventType != .mic {
                 DraggableProgressBar(value: $value)
                 if Defaults[.showClosedNotchHUDPercentage] {
                     Text("\(Int(value * 100))%")
@@ -78,9 +78,9 @@ struct SystemEventIndicatorModifier: View {
         .symbolVariant(.fill)
         .imageScale(.large)
     }
-    
+
     func SpeakerSymbol(_ value: CGFloat) -> String {
-        switch(value) {
+        switch value {
             case 0:
                 return "speaker.slash"
             case 0...0.3:
@@ -98,11 +98,11 @@ struct SystemEventIndicatorModifier: View {
 struct DraggableProgressBar: View {
     @EnvironmentObject var vm: BoringViewModel
     @Binding var value: CGFloat
-    var onChange: ((CGFloat) -> Void)? = nil
-    
+    var onChange: ((CGFloat) -> Void)?
+
     @State private var isDragging = false
     @State private var dragOffset: CGFloat = 0
-    
+
     var body: some View {
         VStack {
             GeometryReader { geo in
@@ -148,11 +148,11 @@ struct DraggableProgressBar: View {
             .frame(height: Defaults[.inlineHUD] ? isDragging ? 8 : 5 : isDragging ? 9 : 6)
         }
     }
-    
+
     private func updateValue(gesture: DragGesture.Value, in geometry: GeometryProxy) {
         let dragPosition = gesture.location.x
         let newValue = dragPosition / geometry.size.width
-        
+
         value = max(0, min(newValue, 1))
         onChange?(value)
     }

@@ -19,7 +19,7 @@ struct InlineHUD: View {
         HStack {
             HStack(spacing: 5) {
                 Group {
-                    switch (type) {
+                    switch type {
                         case .volume:
                             if icon.isEmpty {
                                 Image(systemName: SpeakerSymbol(value))
@@ -53,7 +53,7 @@ struct InlineHUD: View {
                 }
                 .foregroundStyle(.white)
                 .symbolVariant(.fill)
-                
+
                 Text(Type2Name(type))
                     .font(.subheadline)
                     .fontWeight(.medium)
@@ -62,13 +62,13 @@ struct InlineHUD: View {
                     .contentTransition(.numericText())
             }
             .frame(width: 100 - (hoverAnimation ? 0 : 12) + gestureProgress / 2, height: vm.notchSize.height - (hoverAnimation ? 0 : 12), alignment: .leading)
-            
+
             Rectangle()
                 .fill(.black)
                 .frame(width: vm.closedNotchSize.width - 20)
-            
+
             HStack {
-                if (type == .mic) {
+                if type == .mic {
                     Text(value.isZero ? "muted" : "unmuted")
                         .foregroundStyle(.gray)
                         .lineLimit(1)
@@ -85,7 +85,7 @@ struct InlineHUD: View {
                                 BrightnessManager.shared.setAbsolute(value: Float32(v))
                             }
                         })
-                        if (type == .volume && value.isZero) {
+                        if type == .volume && value.isZero {
                             Text("muted")
                                 .font(.caption)
                                 .fontWeight(.medium)
@@ -110,9 +110,9 @@ struct InlineHUD: View {
         }
         .frame(height: vm.closedNotchSize.height + (hoverAnimation ? 8 : 0), alignment: .center)
     }
-    
+
     func SpeakerSymbol(_ value: CGFloat) -> String {
-        switch(value) {
+        switch value {
             case 0:
                 return "speaker"
             case 0...0.3:
@@ -125,9 +125,9 @@ struct InlineHUD: View {
                 return "speaker.wave.2"
         }
     }
-    
+
     func BrightnessSymbol(_ value: CGFloat) -> String {
-        switch(value) {
+        switch value {
             case 0...0.6:
                 return "sun.min"
             case 0.6...1:
@@ -136,9 +136,9 @@ struct InlineHUD: View {
                 return "sun.min"
         }
     }
-    
+
     func Type2Name(_ type: SneakContentType) -> String {
-        switch(type) {
+        switch type {
             case .volume:
                 return "Volume"
             case .brightness:

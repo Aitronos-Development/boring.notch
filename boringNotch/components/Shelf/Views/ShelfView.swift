@@ -31,17 +31,17 @@ struct ShelfView: View {
         }
         .quickLookPresenter(using: quickLookService)
     }
-    
+
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         guard !selection.isDragging else { return false }
         vm.dropEvent = true
         ShelfStateViewModel.shared.load(providers)
         return true
     }
-    
+
     private func updateQuickLookSelection() {
         guard quickLookService.isQuickLookOpen && !selection.selectedIDs.isEmpty else { return }
-        
+
         let selectedItems = selection.selectedItems(in: tvm.items)
         let urls: [URL] = selectedItems.compactMap { item in
             if let fileURL = item.fileURL {
@@ -52,7 +52,7 @@ struct ShelfView: View {
             }
             return nil
         }
-        
+
         if !urls.isEmpty {
             quickLookService.updateSelection(urls: urls)
         }
@@ -86,7 +86,7 @@ struct ShelfView: View {
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.white, .gray)
                         .imageScale(.large)
-                    
+
                     Text("Drop files here")
                         .foregroundStyle(.gray)
                         .font(.system(.title3, design: .rounded))

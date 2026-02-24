@@ -1,4 +1,4 @@
-    //
+//
     //  ProgressIndicator.swift
     //  boringNotch
     //
@@ -11,7 +11,7 @@ import SwiftUI
 struct CircularProgressView: View {
     let progress: Double
     let color: Color
-    
+
     var body: some View {
         ZStack {
             Circle()
@@ -39,13 +39,12 @@ enum ProgressIndicatorType {
     case text
 }
 
-
     // based on type .circle or .text
 struct ProgressIndicator: View {
     var type: ProgressIndicatorType
     var progress: Double
     var color: Color
-    
+
     var body: some View {
         switch type {
             case .circle:

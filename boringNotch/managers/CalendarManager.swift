@@ -61,6 +61,7 @@ class CalendarManager: ObservableObject {
         self.reminderLists = all.filter { $0.isReminder }
         self.allCalendars = all // for legacy compatibility, can be removed if not needed
         updateSelectedCalendars()
+        await updateEvents()
     }
 
     func checkCalendarAuthorization() async {
@@ -99,7 +100,7 @@ class CalendarManager: ObservableObject {
             print("Unknown authorization status")
         }
     }
-    
+
     func checkReminderAuthorization() async {
         let status = EKEventStore.authorizationStatus(for: .reminder)
         DispatchQueue.main.async {
@@ -128,15 +129,32 @@ class CalendarManager: ObservableObject {
             print("Unknown authorization status")
         }
     }
-        
 
     func updateSelectedCalendars() {
+        let allIDs = Set(allCalendars.map { $0.id })
+
         // Populate selectedCalendarIDs based on Defaults calendar selection state
         switch Defaults[.calendarSelectionState] {
         case .all:
-            selectedCalendarIDs = Set(allCalendars.map { $0.id })
+            selectedCalendarIDs = allIDs
         case .selected(let identifiers):
-            selectedCalendarIDs = identifiers
+            // Filter out stale IDs that no longer match any calendar
+            let validIDs = identifiers.intersection(allIDs)
+            // Find newly added calendars not yet in the stored selection
+            let newCalendarIDs = allIDs.subtracting(identifiers)
+            if validIDs.isEmpty && newCalendarIDs.isEmpty {
+                // All stored IDs are stale and no new calendars — reset to all
+                selectedCalendarIDs = allIDs
+                Defaults[.calendarSelectionState] = .all
+            } else {
+                // Include valid stored selections + auto-include new calendars
+                selectedCalendarIDs = validIDs.union(newCalendarIDs)
+                // Persist updated selection so new calendars stay selected
+                if !newCalendarIDs.isEmpty {
+                    Defaults[.calendarSelectionState] = selectedCalendarIDs == allIDs
+                        ? .all : .selected(selectedCalendarIDs)
+                }
+            }
         }
 
         // Update the local calendar objects that correspond to the selected ids
@@ -192,7 +210,7 @@ class CalendarManager: ObservableObject {
         )
         self.events = eventsResult
     }
-    
+
     func setReminderCompleted(reminderID: String, completed: Bool) async {
         await calendarService.setReminderCompleted(reminderID: reminderID, completed: completed)
         // Refresh events after updating

@@ -67,7 +67,7 @@ extension EventType {
 }
 
 extension EventModel {
-    
+
     var eventStatus: EventStatus {
         if start > Date() {
             return .upcoming
@@ -77,7 +77,7 @@ extension EventModel {
             return .ended
         }
     }
-        
+
     var attendance: AttendanceStatus { if case .event(let attendance) = type { return attendance } else { return .unknown } }
 
     var isMeeting: Bool { !participants.isEmpty }

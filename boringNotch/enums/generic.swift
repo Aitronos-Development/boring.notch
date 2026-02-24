@@ -27,6 +27,9 @@ public enum NotchState {
 public enum NotchViews {
     case home
     case shelf
+    case team
+    case vpn
+    case timeTracking
 }
 
 enum SettingsEnum {
@@ -66,4 +69,9 @@ enum SliderColorEnum: String, CaseIterable, Defaults.Serializable {
     case white = "White"
     case albumArt = "Match album art"
     case accent = "Accent color"
+}
+
+enum NotchExpandedLayout: String, CaseIterable, Defaults.Serializable {
+    case sideBySide = "Side by Side"
+    case stacked = "Stacked"
 }

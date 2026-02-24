@@ -20,30 +20,30 @@ class BoringNotchWindow: NSPanel {
             backing: backing,
             defer: flag
         )
-        
+
         isFloatingPanel = true
         isOpaque = false
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         backgroundColor = .clear
         isMovable = false
-        
+
         collectionBehavior = [
             .fullScreenAuxiliary,
             .stationary,
             .canJoinAllSpaces,
-            .ignoresCycle,
+            .ignoresCycle
         ]
-        
+
         isReleasedWhenClosed = false
         level = .mainMenu + 3
         hasShadow = false
     }
-    
+
     override var canBecomeKey: Bool {
         false
     }
-    
+
     override var canBecomeMain: Bool {
         false
     }
