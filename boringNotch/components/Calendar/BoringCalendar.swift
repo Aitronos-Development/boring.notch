@@ -183,20 +183,24 @@ struct CalendarView: View {
     @ObservedObject private var calendarManager = CalendarManager.shared
     @State private var selectedDate = Date()
 
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading) {
-                    Text(selectedDate.formatted(.dateTime.month(.abbreviated)))
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
-                    Text(selectedDate.formatted(.dateTime.year()))
-                        .font(.title3)
-                        .fontWeight(.light)
-                        .foregroundColor(Color(white: 0.65))
-                }
+    /// When true, uses a horizontal layout: date picker on left, events on right.
+    /// Used when the calendar spans full width in the "drops below" mode.
+    var wide: Bool = false
 
+    private var datePickerSection: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading) {
+                Text(selectedDate.formatted(.dateTime.month(.abbreviated)))
+                    .font(wide ? .callout : .title3)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                Text(selectedDate.formatted(.dateTime.year()))
+                    .font(wide ? .callout : .title3)
+                    .fontWeight(.light)
+                    .foregroundColor(Color(white: 0.65))
+            }
+
+            if !wide {
                 ZStack(alignment: .top) {
                     WheelPicker(selectedDate: $selectedDate, config: Config())
                     HStack(alignment: .top) {
@@ -212,15 +216,95 @@ struct CalendarView: View {
                     }
                 }
             }
+        }
+    }
 
-            let filteredEvents = EventListView.filteredEvents(
-                events: calendarManager.events
-            )
+    private var eventsSection: some View {
+        let filteredEvents = EventListView.filteredEvents(
+            events: calendarManager.events
+        )
+        return Group {
             if filteredEvents.isEmpty {
                 EmptyEventsView(selectedDate: selectedDate)
                 Spacer(minLength: 0)
             } else {
                 EventListView(events: calendarManager.events)
+            }
+        }
+    }
+
+    /// The next upcoming or currently in-progress non-all-day event.
+    private var nextUpEvent: EventModel? {
+        let now = Date()
+        let filtered = EventListView.filteredEvents(events: calendarManager.events)
+        return filtered.first(where: { !$0.isAllDay && $0.end > now && !$0.type.isReminder })
+    }
+
+    var body: some View {
+        Group {
+            if wide {
+                // Wide mode: date/month label on left, events fill remaining space on right
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        datePickerSection
+                        // Compact wheel picker constrained to the left column
+                        ZStack(alignment: .top) {
+                            WheelPicker(selectedDate: $selectedDate, config: Config(past: 3, future: 7))
+                            HStack(alignment: .top) {
+                                LinearGradient(
+                                    colors: [Color.black, .clear], startPoint: .leading, endPoint: .trailing
+                                )
+                                .frame(width: 12)
+                                Spacer()
+                                LinearGradient(
+                                    colors: [.clear, Color.black], startPoint: .leading, endPoint: .trailing
+                                )
+                                .frame(width: 12)
+                            }
+                        }
+                        .frame(height: 44)
+
+                        // Next up / in-progress event summary
+                        if let event = nextUpEvent {
+                            Spacer().frame(height: 4)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(event.eventStatus == .inProgress ? "Now" : "Next up")
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(event.eventStatus == .inProgress
+                                        ? Color(event.calendar.color) : Color(white: 0.5))
+                                    .textCase(.uppercase)
+                                HStack(spacing: 4) {
+                                    RoundedRectangle(cornerRadius: 1)
+                                        .fill(Color(event.calendar.color))
+                                        .frame(width: 2, height: 14)
+                                    Text(event.title)
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.white)
+                                        .lineLimit(1)
+                                }
+                                Text(event.start, style: .time)
+                                    .font(.caption2)
+                                    .foregroundStyle(Color(white: 0.5))
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(width: 180)
+
+                    Divider()
+                        .background(Color.white.opacity(0.1))
+
+                    eventsSection
+                }
+            } else {
+                // Default vertical layout: date picker on top, events below
+                VStack(spacing: 0) {
+                    datePickerSection
+                    eventsSection
+                }
             }
         }
         .listRowBackground(Color.clear)
@@ -238,6 +322,8 @@ struct CalendarView: View {
         }
         .onAppear {
             Task {
+                await calendarManager.checkCalendarAuthorization()
+                await calendarManager.checkReminderAuthorization()
                 await calendarManager.updateCurrentDate(Date.now)
                 selectedDate = Date.now
             }

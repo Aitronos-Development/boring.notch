@@ -12,6 +12,7 @@ import SwiftUI
 struct NotchTimerView: View {
     @ObservedObject var timerManager = TimeTrackingManager.shared
     @ObservedObject var activeTaskManager = ActiveTaskManager.shared
+    @ObservedObject var slotManager = TimeSlotSummaryManager.shared
     @Default(.notchExpandedLayout) private var expandedLayout
 
     private var isCompact: Bool {
@@ -28,6 +29,7 @@ struct NotchTimerView: View {
                 idleTimerView
             }
         }
+        .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -35,16 +37,31 @@ struct NotchTimerView: View {
 
     private var activeTimerView: some View {
         VStack(spacing: isCompact ? 4 : 8) {
+            // Tracking badge
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 5, height: 5)
+                Text("Tracking")
+                    .font(.system(size: isCompact ? 8 : 9, weight: .semibold))
+                    .foregroundStyle(.orange)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.orange.opacity(0.12))
+            .clipShape(Capsule())
+
             // Task name
             Text(timerManager.taskName)
-                .font(.system(size: isCompact ? 11 : 13, weight: .medium))
-                .foregroundStyle(.white)
-                .lineLimit(1)
+                .font(.system(size: isCompact ? 11 : 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
                 .truncationMode(.tail)
 
             // Large elapsed time
             Text(timerManager.elapsedFormatted)
-                .font(.system(size: isCompact ? 18 : 28, weight: .bold, design: .monospaced))
+                .font(.system(size: isCompact ? 20 : 30, weight: .bold, design: .monospaced))
                 .foregroundStyle(.green)
 
             // Stop button
@@ -64,6 +81,8 @@ struct NotchTimerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(PlainButtonStyle())
+
+            slotSummaryFooter
         }
     }
 
@@ -72,23 +91,32 @@ struct NotchTimerView: View {
     private var activeTaskView: some View {
         VStack(spacing: isCompact ? 3 : 6) {
             if let task = activeTaskManager.activeTask {
+                // Auto-logging badge
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 5, height: 5)
+                    Text("Auto-logging")
+                        .font(.system(size: isCompact ? 8 : 9, weight: .semibold))
+                        .foregroundStyle(.green)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.green.opacity(0.12))
+                .clipShape(Capsule())
+
                 // Task name
                 Text(task.taskName)
-                    .font(.system(size: isCompact ? 11 : 13, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+                    .font(.system(size: isCompact ? 11 : 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
                     .truncationMode(.tail)
 
-                // Elapsed time
+                // Elapsed time — the main focus
                 Text(activeTaskManager.elapsedFormatted)
-                    .font(.system(size: isCompact ? 18 : 28, weight: .bold, design: .monospaced))
+                    .font(.system(size: isCompact ? 20 : 30, weight: .bold, design: .monospaced))
                     .foregroundStyle(.green)
-
-                if !isCompact {
-                    Text("auto-logging")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.green.opacity(0.5))
-                }
 
                 // Stop button
                 Button {
@@ -107,6 +135,8 @@ struct NotchTimerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(PlainButtonStyle())
+
+                slotSummaryFooter
             }
         }
     }
@@ -170,6 +200,56 @@ struct NotchTimerView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
+            }
+        }
+    }
+
+    // MARK: - Slot summary footer
+
+    @ViewBuilder
+    private var slotSummaryFooter: some View {
+        if slotManager.totalCount > 0 {
+            Divider()
+                .background(Color.white.opacity(0.08))
+                .padding(.top, 2)
+
+            if slotManager.hasPendingSlots {
+                // Pending slots exist — show warning row
+                VStack(spacing: 3) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.badge.exclamationmark")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.orange)
+                        Text("\(slotManager.pendingCount) unlogged · \(slotManager.pendingFormatted)")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.orange.opacity(0.9))
+                        Spacer()
+                    }
+                    if slotManager.loggedCount > 0 {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.green.opacity(0.6))
+                            Text("\(slotManager.loggedCount) logged · \(slotManager.loggedFormatted)")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.gray)
+                            Spacer()
+                        }
+                    }
+                }
+
+            } else {
+                // All caught up
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.green)
+                    Text("\(slotManager.loggedCount) logged · \(slotManager.loggedFormatted)")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.gray)
+                    Spacer()
+                }
+
             }
         }
     }

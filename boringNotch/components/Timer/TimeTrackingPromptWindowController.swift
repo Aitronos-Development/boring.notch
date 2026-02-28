@@ -25,6 +25,7 @@ enum TimeTrackingPromptType {
 struct TimeTrackingPromptContent: View {
     let promptType: TimeTrackingPromptType
     let recentTasks: [NotchRecentTask]
+    let previousTask: ActiveTaskState?
     let onSelectTask: (NotchRecentTask) -> Void
     let onOpenHub: () -> Void
     let onDismiss: () -> Void
@@ -42,14 +43,20 @@ struct TimeTrackingPromptContent: View {
                 .frame(height: 0.5)
                 .padding(.horizontal, 12)
 
-            // Task list
-            if recentTasks.isEmpty {
+            // Task list — previous task pinned at top, then recent tasks
+            if recentTasks.isEmpty && previousTask == nil {
                 emptyTasksView
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
             } else {
                 VStack(spacing: 2) {
-                    ForEach(recentTasks.prefix(3), id: \.id) { task in
+                    // Previous task (pinned, highlighted)
+                    if let prev = previousTask {
+                        previousTaskRow(prev)
+                    }
+                    // Recent tasks (skip any that duplicate the previous task)
+                    let filtered = recentTasks.filter { $0.id != previousTask?.taskId }
+                    ForEach(filtered.prefix(previousTask != nil ? 2 : 3), id: \.id) { task in
                         taskRow(task)
                     }
                 }
@@ -101,14 +108,14 @@ struct TimeTrackingPromptContent: View {
         case .welcomeBack:
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Image(systemName: "hand.wave.fill")
+                    Image(systemName: "lock.open.fill")
                         .font(.system(size: 12))
                         .foregroundStyle(.blue)
                     Text("Welcome back!")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                 }
-                Text("What are you working on?")
+                Text("What are you working on now?")
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.5))
             }
@@ -136,6 +143,42 @@ struct TimeTrackingPromptContent: View {
                     .foregroundStyle(.white.opacity(0.5))
             }
         }
+    }
+
+    // MARK: - Previous Task Row (pinned, highlighted)
+
+    private func previousTaskRow(_ task: ActiveTaskState) -> some View {
+        Button {
+            onSelectTask(NotchRecentTask(id: task.taskId, name: task.taskName))
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.green)
+
+                Text(task.taskName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 4)
+
+                Text("Resume")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.green.opacity(0.8))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.green.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.green.opacity(0.2), lineWidth: 0.5)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Task Row
@@ -272,7 +315,7 @@ final class TimeTrackingPromptWindowController {
     }
 
     /// Show a time tracking prompt below the notch.
-    func show(_ promptType: TimeTrackingPromptType) {
+    func show(_ promptType: TimeTrackingPromptType, previousTask: ActiveTaskState? = nil) {
         dismissTimer?.invalidate()
         dismissTimer = nil
 
@@ -304,6 +347,7 @@ final class TimeTrackingPromptWindowController {
             rootView: TimeTrackingPromptContent(
                 promptType: promptType,
                 recentTasks: recentTasks,
+                previousTask: previousTask,
                 onSelectTask: { [weak self] task in
                     ActiveTaskManager.shared.setActiveTask(
                         taskId: task.id,

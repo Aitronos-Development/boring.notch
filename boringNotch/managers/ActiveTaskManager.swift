@@ -53,14 +53,20 @@ final class ActiveTaskManager: ObservableObject {
     var elapsedFormatted: String {
         guard let task = activeTask else { return "" }
         let startDate = Date(timeIntervalSince1970: Double(task.startedAt) / 1000.0)
-        let elapsed = Int(Date().timeIntervalSince(startDate))
+        let elapsed = max(0, Int(Date().timeIntervalSince(startDate)))
         let h = elapsed / 3600
         let m = (elapsed % 3600) / 60
         let s = elapsed % 60
         if h > 0 {
-            return String(format: "%d:%02d:%02d", h, m, s)
+            // Hours mode: show h:mm only (no seconds clutter)
+            return String(format: "%d:%02d", h, m)
         }
-        return String(format: "%d:%02d", m, s)
+        if m > 0 {
+            // Minutes mode: show m:ss
+            return String(format: "%d:%02d", m, s)
+        }
+        // Seconds only
+        return String(format: "0:%02d", s)
     }
 
     /// Elapsed time as short label (e.g. "2h 15m" or "Since 09:30")

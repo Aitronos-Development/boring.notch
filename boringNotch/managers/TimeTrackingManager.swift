@@ -57,9 +57,15 @@ final class TimeTrackingManager: ObservableObject {
         let m = (elapsedSeconds % 3600) / 60
         let s = elapsedSeconds % 60
         if h > 0 {
-            return String(format: "%d:%02d:%02d", h, m, s)
+            // Hours mode: show h:mm only (no seconds clutter)
+            return String(format: "%d:%02d", h, m)
         }
-        return String(format: "%d:%02d", m, s)
+        if m > 0 {
+            // Minutes mode: show m:ss
+            return String(format: "%d:%02d", m, s)
+        }
+        // Seconds only
+        return String(format: "0:%02d", s)
     }
 
     private init() {

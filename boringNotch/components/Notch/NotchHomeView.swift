@@ -466,6 +466,7 @@ struct NotchHomeView: View {
     @ObservedObject var activeTaskManager = ActiveTaskManager.shared
     @Default(.notchExpandedLayout) private var expandedLayout
     @Default(.notchExpandedHeight) private var expandedHeight
+    @Default(.sideBySideSplitRatio) private var sideBySideSplitRatio
     let albumArtNamespace: Namespace.ID
 
     /// Height threshold: above this the calendar drops to a full-width row below
@@ -515,7 +516,7 @@ struct NotchHomeView: View {
     }
 
     private var singlePanelWidth: CGFloat {
-        shouldShowCamera ? 170 : 215
+        shouldShowCamera ? 240 : 290
     }
 
     /// When height is large enough, calendar drops to full-width row below the top content
@@ -536,7 +537,7 @@ struct NotchHomeView: View {
                     .background(Color.white.opacity(0.1))
                     .padding(.horizontal, 4)
 
-                CalendarView()
+                CalendarView(wide: true)
                     .onHover { vm.isHoveringCalendar = $0 }
                     .environmentObject(vm)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -550,6 +551,7 @@ struct NotchHomeView: View {
     private var topRow: some View {
         HStack(alignment: .top, spacing: rightPanelSpacing) {
             MusicPlayerView(albumArtNamespace: albumArtNamespace)
+                .layoutPriority(1)  // music player always gets its preferred width first
 
             rightPanelContent
 
@@ -575,7 +577,7 @@ struct NotchHomeView: View {
     @ViewBuilder
     private var rightPanelContent: some View {
         if calendarDropsBelow {
-            // Calendar is in the bottom row — right panel only has time tracking (if any)
+            // Calendar is in the bottom row — time tracking gets the full single-panel width
             if hasTimeTrackingContent {
                 timeTrackingPanel
                     .frame(width: singlePanelWidth)
@@ -622,8 +624,17 @@ struct NotchHomeView: View {
 
     // MARK: - Side by Side Layout
 
-    private var sideBySideItemWidth: CGFloat {
-        shouldShowCamera ? 130 : 155
+    /// Total right-panel width for both side-by-side items (excluding the 8pt inter-panel gap).
+    private var sideBySideTotalWidth: CGFloat {
+        shouldShowCamera ? 290 : 340
+    }
+
+    private var sideBySideLeftWidth: CGFloat {
+        (sideBySideTotalWidth * sideBySideSplitRatio).rounded()
+    }
+
+    private var sideBySideRightWidth: CGFloat {
+        (sideBySideTotalWidth * (1 - sideBySideSplitRatio)).rounded()
     }
 
     private var sideBySidePanel: some View {
@@ -636,12 +647,12 @@ struct NotchHomeView: View {
                     NotchTimeTrackingView()
                 }
             }
-            .frame(width: sideBySideItemWidth)
+            .frame(width: sideBySideLeftWidth)
             .transition(.opacity)
 
             // Calendar
             CalendarView()
-                .frame(width: sideBySideItemWidth)
+                .frame(width: sideBySideRightWidth)
                 .onHover { vm.isHoveringCalendar = $0 }
                 .environmentObject(vm)
                 .transition(.opacity)

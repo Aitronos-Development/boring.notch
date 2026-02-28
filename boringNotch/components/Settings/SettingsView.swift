@@ -1915,8 +1915,17 @@ func warningBadge(_ text: String, _ description: String) -> some View {
 
 struct LayoutSettings: View {
     @Default(.notchExpandedLayout) var expandedLayout: NotchExpandedLayout
+    @Default(.notchExpandedHeight) var expandedHeight: CGFloat
+    @Default(.sideBySideSplitRatio) var splitRatio: CGFloat
     @Default(.showCalendar) var showCalendar: Bool
     @Default(.showTimeTracking) var showTimeTracking: Bool
+
+    /// Matches NotchHomeView.calendarDropThreshold
+    private let calendarDropThreshold: CGFloat = 250
+
+    private var calendarDropsBelow: Bool {
+        showCalendar && expandedHeight >= calendarDropThreshold
+    }
 
     var body: some View {
         Form {
@@ -1931,6 +1940,75 @@ struct LayoutSettings: View {
                 Text("Notch Layout")
             } footer: {
                 Text(layoutDescription)
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Notch height")
+                        Spacer()
+                        Text("\(Int(expandedHeight))pt")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $expandedHeight, in: 190...350, step: 10)
+                    if expandedHeight > 190 && showCalendar {
+                        HStack(spacing: 4) {
+                            Image(systemName: expandedHeight >= calendarDropThreshold
+                                  ? "checkmark.circle.fill" : "info.circle")
+                                .font(.system(size: 10))
+                                .foregroundStyle(expandedHeight >= calendarDropThreshold ? .green : .secondary)
+                            Text(expandedHeight >= calendarDropThreshold
+                                 ? "Calendar spans full width below"
+                                 : "Increase to \(Int(calendarDropThreshold))pt for full-width calendar row")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                if expandedHeight > 190 {
+                    Button("Reset to default") {
+                        expandedHeight = 190
+                    }
+                    .font(.caption)
+                }
+            } header: {
+                Text("Size")
+            } footer: {
+                Text("Increase height to show more content. Above \(Int(calendarDropThreshold))pt the calendar moves to a full-width row underneath.")
+            }
+
+            if expandedLayout == .sideBySide && showCalendar && showTimeTracking && !calendarDropsBelow {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Timer / Tracking")
+                            Spacer()
+                            Text("\(Int(splitRatio * 100))%")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                            Text("·")
+                                .foregroundStyle(.tertiary)
+                            Text("\(Int((1 - splitRatio) * 100))%")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                            Text("Calendar")
+                        }
+                        .font(.callout)
+                        Slider(value: $splitRatio, in: 0.25...0.75, step: 0.05)
+                        if abs(splitRatio - 0.5) > 0.001 {
+                            Button("Reset to equal split") {
+                                splitRatio = 0.5
+                            }
+                            .font(.caption)
+                        }
+                    }
+                } header: {
+                    Text("Panel Width Split")
+                } footer: {
+                    Text("Drag to give more width to time tracking or calendar in side-by-side mode.")
+                }
             }
 
             Section {
@@ -1961,39 +2039,47 @@ struct LayoutSettings: View {
     private var layoutDescription: String {
         switch expandedLayout {
         case .sideBySide:
+            if calendarDropsBelow {
+                return "Calendar spans full width below. Time tracking next to music player."
+            }
             return "Calendar and time tracking shown next to each other horizontally."
         case .stacked:
-            return "Time tracking on top, calendar below."
+            if calendarDropsBelow {
+                return "Calendar spans full width below. Time tracking next to music player."
+            }
+            return "Time tracking on top, calendar below in the right panel."
         }
     }
 
     // MARK: - Visual Preview
 
     private var layoutPreview: some View {
-        HStack(spacing: 0) {
-            // Music player mock
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                    VStack(spacing: 4) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.1))
-                            .frame(width: 36, height: 36)
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.white.opacity(0.06))
-                            .frame(width: 50, height: 4)
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                musicMock
+                    .frame(width: 80, height: 70)
+
+                Spacer().frame(width: 8)
+
+                if calendarDropsBelow {
+                    panelMock(icon: "timer", label: "Time Tracking", color: .orange, active: showTimeTracking)
+                } else {
+                    switch expandedLayout {
+                    case .sideBySide:
+                        sideBySidePreview
+                    case .stacked:
+                        stackedPreview
                     }
-                )
-                .frame(width: 80, height: 70)
+                }
+            }
 
-            Spacer().frame(width: 8)
+            if calendarDropsBelow {
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                    .padding(.vertical, 4)
 
-            // Right panel mock
-            switch expandedLayout {
-            case .sideBySide:
-                sideBySidePreview
-            case .stacked:
-                stackedPreview
+                panelMock(icon: "calendar", label: "Calendar — full width", color: .blue, active: showCalendar)
+                    .frame(height: 36)
             }
         }
         .padding(12)
@@ -2003,10 +2089,30 @@ struct LayoutSettings: View {
         )
     }
 
+    private var musicMock: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(Color.white.opacity(0.08))
+            .overlay(
+                VStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.1))
+                        .frame(width: 36, height: 36)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.06))
+                        .frame(width: 50, height: 4)
+                }
+            )
+    }
+
     private var sideBySidePreview: some View {
-        HStack(spacing: 6) {
-            panelMock(icon: "timer", label: "Time", color: .orange, active: showTimeTracking)
-            panelMock(icon: "calendar", label: "Calendar", color: .blue, active: showCalendar)
+        GeometryReader { geo in
+            let total = geo.size.width - 6 // subtract spacing
+            HStack(spacing: 6) {
+                panelMock(icon: "timer", label: "Time", color: .orange, active: showTimeTracking)
+                    .frame(width: (total * splitRatio).rounded())
+                panelMock(icon: "calendar", label: "Calendar", color: .blue, active: showCalendar)
+                    .frame(width: (total * (1 - splitRatio)).rounded())
+            }
         }
     }
 

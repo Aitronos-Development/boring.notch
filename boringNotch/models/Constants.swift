@@ -224,4 +224,7 @@ extension Defaults.Keys {
     // MARK: Notch Layout
     static let notchExpandedLayout = Key<NotchExpandedLayout>("notchExpandedLayout", default: .sideBySide)
     static let notchExpandedHeight = Key<CGFloat>("notchExpandedHeight", default: 190)
+    /// Side-by-side split: fraction (0.25–0.75) of the right-panel width given to the left item (time tracking).
+    /// 0.5 = equal; < 0.5 = more calendar; > 0.5 = more time tracking.
+    static let sideBySideSplitRatio = Key<CGFloat>("sideBySideSplitRatio", default: 0.5)
 }

@@ -7,8 +7,8 @@
 //    - Screen lock/unlock (DistributedNotificationCenter)
 //    - New meeting slots (Combine subscription on NotchTimeSlotManager.$slots)
 //
-//  On lock:   remembers active task (does NOT clear it)
-//  On unlock: silently resumes if a task was running; only prompts if no task was active
+//  On lock:   stops the active timer/task so time isn't logged while away
+//  On unlock: always shows "What are you working on?" prompt to resume or pick a new task
 //  On meeting: shows "Meeting detected" prompt
 //
 
@@ -24,8 +24,8 @@ final class SessionLifecycleManager {
     private var slotsCancellable: AnyCancellable?
     private var previousMeetingSlotIds: Set<String> = []
     private var isFirstSlotLoad = true
-    /// Whether a task was active when the screen was locked — used to skip the prompt on unlock
-    private var hadActiveTaskAtLock = false
+    /// The task that was active when the screen locked — offered as the first option on unlock
+    private var taskAtLock: ActiveTaskState? = nil
 
     private init() {
         setupScreenObservers()
@@ -65,25 +65,27 @@ final class SessionLifecycleManager {
     }
 
     private func onScreenLocked() {
-        // Remember whether a task was active — do NOT clear it.
-        // The user shouldn't have to re-select their task every time they lock the screen.
-        hadActiveTaskAtLock = ActiveTaskManager.shared.activeTask != nil
+        // Remember what was running, then stop it so time isn't logged while away.
+        taskAtLock = ActiveTaskManager.shared.activeTask
+        if taskAtLock != nil {
+            ActiveTaskManager.shared.clearActiveTask()
+        }
+        if TimeTrackingManager.shared.isTracking {
+            TimeTrackingManager.shared.stopTimer()
+        }
     }
 
     private func onScreenUnlocked() {
-        // If a task was already running, just let it continue — no prompt needed.
-        // Only show the "Welcome back" prompt if there was no active task.
-        if hadActiveTaskAtLock || ActiveTaskManager.shared.activeTask != nil {
-            return
-        }
+        // Always show the prompt after unlock — let the user decide what to work on next.
+        // Pass the previously-running task so it appears at the top of the list.
+        let previousTask = taskAtLock
+        taskAtLock = nil
 
         // Delay to let macOS settle (login animation, window restoration)
         Task {
             try? await Task.sleep(for: .milliseconds(1500))
             await MainActor.run {
-                // Double-check — a task might have been set during the delay
-                guard ActiveTaskManager.shared.activeTask == nil else { return }
-                TimeTrackingPromptWindowController.shared.show(.welcomeBack)
+                TimeTrackingPromptWindowController.shared.show(.welcomeBack, previousTask: previousTask)
             }
         }
     }

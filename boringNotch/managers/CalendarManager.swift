@@ -32,7 +32,8 @@ class CalendarManager: ObservableObject {
         self.currentWeekStartDate = CalendarManager.startOfDay(Date())
         setupEventStoreChangedObserver()
         Task {
-            await reloadCalendarAndReminderLists()
+            await checkCalendarAuthorization()
+            await checkReminderAuthorization()
         }
     }
 
@@ -66,10 +67,8 @@ class CalendarManager: ObservableObject {
 
     func checkCalendarAuthorization() async {
         let status = EKEventStore.authorizationStatus(for: .event)
-        DispatchQueue.main.async {
-            print("📅 Current calendar authorization status: \(status)")
-            self.calendarAuthorizationStatus = status
-        }
+        print("📅 Current calendar authorization status: \(status)")
+        self.calendarAuthorizationStatus = status
 
         switch status {
         case .notDetermined:
@@ -80,20 +79,12 @@ class CalendarManager: ObservableObject {
             self.calendarAuthorizationStatus = granted ? .fullAccess : .denied
             if granted {
                 await reloadCalendarAndReminderLists()
-                events = await calendarService.events(
-                    from: currentWeekStartDate,
-                    to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
-                    calendars: selectedCalendars.map { $0.id })
             }
         case .restricted, .denied:
             NSLog("Calendar access denied or restricted")
         case .fullAccess:
-            NSLog("Full access")
+            NSLog("Full calendar access")
             await reloadCalendarAndReminderLists()
-            events = await calendarService.events(
-                from: currentWeekStartDate,
-                to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
-                calendars: selectedCalendars.map { $0.id })
         case .writeOnly:
             NSLog("Write only")
         @unknown default:
@@ -103,10 +94,8 @@ class CalendarManager: ObservableObject {
 
     func checkReminderAuthorization() async {
         let status = EKEventStore.authorizationStatus(for: .reminder)
-        DispatchQueue.main.async {
-            print("📅 Current reminder authorization status: \(status)")
-            self.reminderAuthorizationStatus = status
-        }
+        print("📅 Current reminder authorization status: \(status)")
+        self.reminderAuthorizationStatus = status
 
         switch status {
         case .notDetermined:
@@ -121,7 +110,7 @@ class CalendarManager: ObservableObject {
         case .restricted, .denied:
             NSLog("Reminder access denied or restricted")
         case .fullAccess:
-            NSLog("Full access")
+            NSLog("Full reminder access")
             await reloadCalendarAndReminderLists()
         case .writeOnly:
             NSLog("Write only")

@@ -62,10 +62,30 @@ struct VpnTrayState: Codable {
     let isAllowlisted: Bool
     /// The current public IP address (if detection succeeded).
     let publicIp: String?
+    /// True while Hub is waiting for a GCP VM to boot before connecting.
+    let serverBooting: Bool
+    /// Unix timestamp (ms) when the current connect attempt started.
+    /// 0 when not connecting. Used to keep progress arcs in sync between Hub and Notch.
+    let connectStartedAtMs: UInt64
+    /// Current connect stage from Hub: "" | "setup" | "server" | "connecting" | "verifying"
+    let connectStage: String
+    /// Deterministic progress within the current stage: [current_step, total_steps].
+    /// Progress fraction = step / total. [0, 0] = indeterminate.
+    let connectProgress: [UInt32]
+    /// Short detail string for the current sub-step (e.g. "VM: STAGING", "Verify 3/10").
+    let connectDetail: String
 
     /// Whether VPN is in a transitional state (connecting/disconnecting).
     var isTransitional: Bool {
         connectionStatus == "connecting" || connectionStatus == "disconnecting"
+    }
+
+    /// Elapsed seconds since connecting started (computed from Hub's authoritative start time).
+    var connectingElapsedSecs: Double {
+        guard connectStartedAtMs > 0 else { return 0 }
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        let elapsed = nowMs > connectStartedAtMs ? Double(nowMs - connectStartedAtMs) / 1000.0 : 0
+        return elapsed
     }
 
     enum CodingKeys: String, CodingKey {
@@ -84,6 +104,11 @@ struct VpnTrayState: Codable {
         case profiles
         case isAllowlisted = "is_allowlisted"
         case publicIp = "public_ip"
+        case serverBooting = "server_booting"
+        case connectStartedAtMs = "connect_started_at_ms"
+        case connectStage = "connect_stage"
+        case connectProgress = "connect_progress"
+        case connectDetail = "connect_detail"
     }
 
     init(from decoder: Decoder) throws {
@@ -104,6 +129,11 @@ struct VpnTrayState: Codable {
         // Backwards-compatible: default to false/nil if Hub version doesn't include these fields
         isAllowlisted = try container.decodeIfPresent(Bool.self, forKey: .isAllowlisted) ?? false
         publicIp = try container.decodeIfPresent(String.self, forKey: .publicIp)
+        serverBooting = try container.decodeIfPresent(Bool.self, forKey: .serverBooting) ?? false
+        connectStartedAtMs = try container.decodeIfPresent(UInt64.self, forKey: .connectStartedAtMs) ?? 0
+        connectStage = try container.decodeIfPresent(String.self, forKey: .connectStage) ?? ""
+        connectProgress = try container.decodeIfPresent([UInt32].self, forKey: .connectProgress) ?? [0, 0]
+        connectDetail = try container.decodeIfPresent(String.self, forKey: .connectDetail) ?? ""
     }
 }
 
@@ -140,10 +170,27 @@ final class VpnManager: ObservableObject {
 
     /// Selected profile ID for server picker. nil = "Auto" (recommended).
     @Published var selectedProfileId: String? = nil
+    /// True while Hub is waiting for a GCP VM to boot.
+    @Published private(set) var serverBooting: Bool = false
+    /// Unix timestamp (ms) from Hub when this connect started. 0 = not connecting.
+    /// Used to compute elapsed time in sync with Hub UI.
+    @Published private(set) var connectStartedAtMs: UInt64 = 0
+    /// Current connect stage from Hub: "" | "setup" | "server" | "connecting" | "verifying"
+    @Published private(set) var connectStage: String = ""
+    /// Elapsed seconds since connect started — computed from Hub's authoritative timestamp.
+    /// Published separately so SwiftUI views re-render each tick.
+    @Published private(set) var connectingElapsed: Int = 0
+    /// Deterministic progress within the current connect stage: [current_step, total_steps].
+    /// Progress fraction = step / total. [0, 0] = indeterminate / just entered stage.
+    @Published private(set) var connectProgress: [UInt32] = [0, 0]
+    /// Short human-readable detail for the current sub-step (e.g. "VM: STAGING", "Verify 3/10").
+    @Published private(set) var connectDetail: String = ""
 
     private var pollTimer: Timer?
     /// Fast-poll timer used during transitional states (1s interval).
     private var fastPollTimer: Timer?
+    /// 1s tick timer that re-publishes connectingElapsed while connecting.
+    private var elapsedTickTimer: Timer?
     private var cachedPort: Int?
     private var currentTask: Task<Void, Never>?
 
@@ -183,6 +230,7 @@ final class VpnManager: ObservableObject {
     deinit {
         pollTimer?.invalidate()
         fastPollTimer?.invalidate()
+        elapsedTickTimer?.invalidate()
     }
 
     // MARK: - Hub Port Discovery
@@ -215,7 +263,7 @@ final class VpnManager: ObservableObject {
 
     private func startPolling() {
         refresh()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.refresh()
             }
@@ -274,9 +322,57 @@ final class VpnManager: ObservableObject {
             self.connectionStatus = status
             self.isConnecting = (status == "connecting")
             self.isDisconnecting = (status == "disconnecting")
+            self.serverBooting = state.serverBooting
 
-            // Fast-poll during transitional states for responsive UI
-            if state.isTransitional {
+            // Sync Hub's authoritative start timestamp — keeps arcs in sync
+            let hubStartMs = state.connectStartedAtMs
+            let nowConnecting = (status == "connecting") || state.serverBooting
+
+            // Sync connect stage and deterministic progress from Hub
+            if !state.connectStage.isEmpty {
+                self.connectStage = state.connectStage
+                self.connectProgress = state.connectProgress
+                self.connectDetail = state.connectDetail
+            } else if !nowConnecting {
+                self.connectStage = ""
+                self.connectProgress = [0, 0]
+                self.connectDetail = ""
+            }
+            if hubStartMs > 0 && hubStartMs != self.connectStartedAtMs {
+                // Hub gave us a new start time — adopt it
+                self.connectStartedAtMs = hubStartMs
+            } else if !nowConnecting {
+                self.connectStartedAtMs = 0
+            }
+
+            // Update elapsed from Hub's timestamp (in sync with Hub UI)
+            if hubStartMs > 0 {
+                let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+                let elapsed = nowMs > hubStartMs ? Int((nowMs - hubStartMs) / 1000) : 0
+                self.connectingElapsed = min(elapsed, 135)
+            } else {
+                self.connectingElapsed = 0
+            }
+
+            // Start/stop 1s tick timer for live elapsed updates between polls
+            if nowConnecting || state.serverBooting {
+                if self.elapsedTickTimer == nil {
+                    self.elapsedTickTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                        Task { @MainActor [weak self] in
+                            guard let self, self.connectStartedAtMs > 0 else { return }
+                            let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+                            let elapsed = nowMs > self.connectStartedAtMs ? Int((nowMs - self.connectStartedAtMs) / 1000) : 0
+                            self.connectingElapsed = min(elapsed, 135)
+                        }
+                    }
+                }
+            } else {
+                self.elapsedTickTimer?.invalidate()
+                self.elapsedTickTimer = nil
+            }
+
+            // Fast-poll during transitional states or while server is booting
+            if state.isTransitional || state.serverBooting {
                 startFastPolling()
             } else {
                 stopFastPolling()
@@ -309,7 +405,23 @@ final class VpnManager: ObservableObject {
     func connect(profileId: String? = nil) {
         let targetId = profileId ?? selectedProfileId
         isConnecting = true
+        serverBooting = true
         connectionStatus = "connecting"
+        connectStage = "setup"
+        // Use local clock for immediate feedback; Hub will confirm start time on next poll
+        let nowMs = UInt64(Date().timeIntervalSince1970 * 1000)
+        connectStartedAtMs = nowMs
+        connectingElapsed = 0
+        if elapsedTickTimer == nil {
+            elapsedTickTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.connectStartedAtMs > 0 else { return }
+                    let nowMs2 = UInt64(Date().timeIntervalSince1970 * 1000)
+                    let elapsed = nowMs2 > self.connectStartedAtMs ? Int((nowMs2 - self.connectStartedAtMs) / 1000) : 0
+                    self.connectingElapsed = min(elapsed, 135)
+                }
+            }
+        }
         startFastPolling()
         Task { [weak self] in
             guard let self = self else { return }

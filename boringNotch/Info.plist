@@ -17,6 +17,10 @@
 	<key>SUEnableAutomaticChecks</key>
 	<false/>
 	-->
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Aitronos Notch needs access to your calendars to show upcoming events.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Aitronos Notch needs access to your reminders to show them alongside events.</string>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict/>

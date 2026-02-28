@@ -26,12 +26,14 @@ struct ContentView: View {
     @ObservedObject var volumeManager = VolumeManager.shared
     @ObservedObject var teamManager = TeamPresenceManager.shared
     @ObservedObject var timerManager = TimeTrackingManager.shared
+    @ObservedObject var activeTaskManager = ActiveTaskManager.shared
     @ObservedObject var vpnManager = VpnManager.shared
     @ObservedObject var notificationManager = NotificationManager.shared
     @State private var hoverTask: Task<Void, Never>?
     @State private var isHovering: Bool = false
     @State private var tabSwitching: Bool = false
     @State private var anyDropDebounceTask: Task<Void, Never>?
+    @State private var inactivityTask: Task<Void, Never>?
 
     @State private var gestureProgress: CGFloat = .zero
 
@@ -42,6 +44,11 @@ struct ContentView: View {
     @Default(.useMusicVisualizer) var useMusicVisualizer
 
     @Default(.showNotHumanFace) var showNotHumanFace
+
+    @Default(.notchExpandedLayout) var notchExpandedLayout
+    @Default(.notchExpandedHeight) var notchExpandedHeight
+    @Default(.showCalendar) var showCalendar
+    @Default(.showTimeTracking) var showTimeTracking
 
     // Shared interactive spring for movement/resizing to avoid conflicting animations
     private let animationSpring = Animation.interactiveSpring(response: 0.38, dampingFraction: 0.8, blendDuration: 0)
@@ -72,13 +79,16 @@ struct ContentView: View {
 
     private var isTimerChinActive: Bool {
         !coordinator.expandingView.show && vm.notchState == .closed
-            && timerManager.isTracking && timerManager.isLoaded
+            && (
+                (timerManager.isTracking && timerManager.isLoaded)
+                || activeTaskManager.activeTask != nil  // active task is cached — show even if Hub isn't loaded yet
+            )
             && Defaults[.showTimerInClosedNotch] && !vm.hideOnClosed
     }
 
     private var isVpnTransitionChinActive: Bool {
         !coordinator.expandingView.show && vm.notchState == .closed
-            && (vpnManager.isConnecting || vpnManager.isDisconnecting)
+            && (vpnManager.isConnecting || vpnManager.isDisconnecting || vpnManager.serverBooting)
             && vpnManager.isLoaded
             && Defaults[.showVpnInClosedNotch] && !vm.hideOnClosed
     }
@@ -91,12 +101,11 @@ struct ContentView: View {
             && vm.notchState == .closed && Defaults[.showPowerStatusNotifications] {
             chinWidth = 640
         } else if isMusicChinActive && isTimerChinActive {
-            // Both music and timer: album art left + timer text right (wider)
-            chinWidth += (2 * sideWidth + 20) + 70
+            chinWidth += (2 * sideWidth + 60)
         } else if isMusicChinActive {
             chinWidth += (2 * sideWidth + 20)
         } else if isTimerChinActive {
-            chinWidth += (2 * sideWidth + 20)
+            chinWidth += (2 * sideWidth + 60)
         } else if isVpnTransitionChinActive {
             chinWidth += (2 * sideWidth + 20)
         } else if !coordinator.expandingView.show && vm.notchState == .closed
@@ -208,6 +217,13 @@ struct ContentView: View {
                                 isHovering = false
                             }
                         }
+                        // Manage inactivity timer: start when opened, cancel when closed
+                        if newState == .open {
+                            resetInactivityTimer()
+                        } else {
+                            inactivityTask?.cancel()
+                            inactivityTask = nil
+                        }
                     }
                     .onChange(of: coordinator.currentView) { _, _ in
                         // Resize when switching tabs while open (team view is taller)
@@ -303,6 +319,35 @@ struct ContentView: View {
         .background(dragDetector)
         .preferredColorScheme(.dark)
         .environmentObject(vm)
+        // Live-update the notch size when layout settings change while open
+        .onChange(of: notchExpandedLayout) { _, _ in
+            if vm.notchState == .open {
+                withAnimation(animationSpring) {
+                    vm.notchSize = CGSize(width: openNotchSize.width, height: activeOpenHeight)
+                }
+            }
+        }
+        .onChange(of: notchExpandedHeight) { _, _ in
+            if vm.notchState == .open {
+                withAnimation(animationSpring) {
+                    vm.notchSize = CGSize(width: openNotchSize.width, height: activeOpenHeight)
+                }
+            }
+        }
+        .onChange(of: showCalendar) { _, _ in
+            if vm.notchState == .open {
+                withAnimation(animationSpring) {
+                    vm.notchSize = CGSize(width: openNotchSize.width, height: activeOpenHeight)
+                }
+            }
+        }
+        .onChange(of: showTimeTracking) { _, _ in
+            if vm.notchState == .open {
+                withAnimation(animationSpring) {
+                    vm.notchSize = CGSize(width: openNotchSize.width, height: activeOpenHeight)
+                }
+            }
+        }
         .onChange(of: vm.anyDropZoneTargeting) { _, isTargeted in
             anyDropDebounceTask?.cancel()
 
@@ -543,14 +588,33 @@ struct ContentView: View {
 
     @ViewBuilder
     func VpnConnectingChin() -> some View {
+        let isBooting = vpnManager.serverBooting
+        let maxSecs: Double = isBooting ? 135 : 30
+        let elapsed = vpnManager.connectingElapsed
+        let progress = min(Double(elapsed) / maxSecs, 0.99)
+
         HStack {
             HStack(spacing: 4) {
-                ProgressView()
-                    .controlSize(.mini)
-                    .scaleEffect(0.6)
-                Image(systemName: "shield.lefthalf.filled")
+                // Fill-arc for booting/connecting; spinner for disconnecting
+                if isBooting || vpnManager.isConnecting {
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(Color.green.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .animation(.linear(duration: 1), value: progress)
+                    }
+                    .frame(width: 10, height: 10)
+                } else {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .scaleEffect(0.6)
+                }
+                Image(systemName: isBooting ? "server.rack" : "shield.lefthalf.filled")
                     .font(.system(size: 9))
-                    .foregroundStyle(vpnManager.isConnecting ? .green : .orange)
+                    .foregroundStyle(vpnManager.isDisconnecting ? .orange : .green)
             }
             .frame(width: max(0, vm.effectiveClosedNotchHeight - 12))
 
@@ -558,10 +622,27 @@ struct ContentView: View {
                 .fill(.black)
                 .frame(width: vm.closedNotchSize.width - 20)
 
-            Text(vpnManager.isConnecting ? "Connecting..." : "Disconnecting...")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(vpnManager.isConnecting ? .green : .orange)
-                .frame(width: max(0, vm.effectiveClosedNotchHeight + 30), alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(isBooting ? "Starting server..." : (vpnManager.isConnecting ? "Connecting..." : "Disconnecting..."))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(vpnManager.isDisconnecting ? .orange : .green)
+                if (isBooting || vpnManager.isConnecting) && elapsed > 0 {
+                    // Thin fill progress bar
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.white.opacity(0.1))
+                                .frame(height: 2)
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.green.opacity(0.7))
+                                .frame(width: geo.size.width * progress, height: 2)
+                                .animation(.linear(duration: 1), value: progress)
+                        }
+                    }
+                    .frame(height: 2)
+                }
+            }
+            .frame(width: max(0, vm.effectiveClosedNotchHeight + 30), alignment: .leading)
         }
         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
     }
@@ -689,71 +770,80 @@ struct ContentView: View {
 
     @ViewBuilder
     func TimerLiveActivity() -> some View {
-        HStack {
+        let isAutoTracking = !timerManager.isTracking && activeTaskManager.activeTask != nil
+        let elapsed = isAutoTracking
+            ? activeTaskManager.elapsedFormatted
+            : timerManager.elapsedFormatted
+
+        let notchW = vm.closedNotchSize.width + -cornerRadiusInsets.closed.top
+        HStack(spacing: 0) {
+            // Left: status indicator — fixed padding from notch edge
             HStack(spacing: 4) {
                 Circle()
                     .fill(Color.green)
-                    .frame(width: 6, height: 6)
-                Image(systemName: "timer")
+                    .frame(width: 5, height: 5)
+                Image(systemName: isAutoTracking ? "bolt.fill" : "timer")
                     .font(.system(size: 9))
                     .foregroundStyle(.green)
             }
-            .frame(
-                width: max(0, vm.effectiveClosedNotchHeight - 12),
-                alignment: .center
-            )
+            .padding(.horizontal, 8)
 
+            // Middle: notch black gap
             Rectangle()
                 .fill(.black)
-                .frame(width: vm.closedNotchSize.width - 20)
+                .frame(width: notchW)
 
-            Text(timerManager.elapsedFormatted)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
+            // Right: elapsed — grows with content, padding keeps it off the edge
+            Text(elapsed)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.green)
-                .frame(
-                    width: max(0, vm.effectiveClosedNotchHeight - 12),
-                    alignment: .center
-                )
+                .fixedSize()
+                .padding(.horizontal, 8)
         }
         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
     }
 
     @ViewBuilder
     func CombinedMusicTimerChin() -> some View {
-        HStack {
-            // Left: Album art (same as MusicLiveActivity)
-            Image(nsImage: musicManager.albumArt)
-                .resizable()
-                .clipped()
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: MusicPlayerImageSizes.cornerRadiusInset.closed)
-                )
-                .matchedGeometryEffect(id: "albumArt", in: albumArtNamespace)
-                .frame(
-                    width: max(0, vm.effectiveClosedNotchHeight - 12),
-                    height: max(0, vm.effectiveClosedNotchHeight - 12)
-                )
+        let isAutoTracking = !timerManager.isTracking && activeTaskManager.activeTask != nil
+        let elapsed = isAutoTracking
+            ? activeTaskManager.elapsedFormatted
+            : timerManager.elapsedFormatted
+        let sideW2 = max(0, vm.effectiveClosedNotchHeight - 12)
+        let notchW2 = vm.closedNotchSize.width + -cornerRadiusInsets.closed.top
 
-            // Middle: Black notch gap
+        HStack(spacing: 0) {
+            // Left: music visualizer (same as MusicLiveActivity right side)
+            HStack {
+                if useMusicVisualizer {
+                    Rectangle()
+                        .fill(Defaults[.coloredSpectrogram]
+                            ? Color(nsColor: musicManager.avgColor).gradient
+                            : Color.gray.gradient)
+                        .frame(width: sideW2, alignment: .center)
+                        .matchedGeometryEffect(id: "spectrum", in: albumArtNamespace)
+                        .mask {
+                            AudioSpectrumView(isPlaying: $musicManager.isPlaying)
+                                .frame(width: 16, height: 12)
+                        }
+                } else {
+                    LottieAnimationContainer()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .padding(.horizontal, 8)
+
+            // Middle: notch black gap
             Rectangle()
                 .fill(.black)
-                .frame(width: vm.closedNotchSize.width - 20)
+                .frame(width: notchW2)
 
-            // Right: Timer elapsed + pulse dot
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 5, height: 5)
-                Text(timerManager.elapsedFormatted)
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.green)
-                    .lineLimit(1)
-            }
-            .frame(
-                width: max(0, vm.effectiveClosedNotchHeight - 12) + 70,
-                alignment: .center
-            )
+            // Right: elapsed — grows with content
+            Text(elapsed)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.green)
+                .fixedSize()
+                .padding(.horizontal, 8)
         }
         .frame(height: vm.effectiveClosedNotchHeight, alignment: .center)
     }
@@ -814,6 +904,23 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Inactivity Timer
+
+    /// After 30 seconds of no hover activity while the notch is open,
+    /// automatically switch back to the home tab.
+    private func resetInactivityTimer() {
+        inactivityTask?.cancel()
+        inactivityTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(30))
+            guard !Task.isCancelled else { return }
+            if vm.notchState == .open && coordinator.currentView != .home {
+                withAnimation(.smooth) {
+                    coordinator.currentView = .home
+                }
+            }
+        }
+    }
+
     /// Re-adjust notch height when time tracking content changes (data loads, task selected/cleared).
     /// Suppressed during tab switch animation to prevent overlapping animations / layout thrashing.
     private func resizeIfTimeTracking() {
@@ -840,6 +947,10 @@ struct ContentView: View {
         hoverTask?.cancel()
 
         if hovering {
+            // Reset inactivity timer on any interaction
+            if vm.notchState == .open {
+                resetInactivityTimer()
+            }
             withAnimation(animationSpring) {
                 isHovering = true
             }
